@@ -15,5 +15,5 @@ object SendMailTest extends App {
     retryOn = 1.minute,
     deliveryAttempts = 5
   ))*/
-  sendMailSimple("ogameinformer7@gmail.com", "ogame report", "test")
+  //sendMailSimple("ogameinformer7@gmail.com", "ogame report", "test")
 }

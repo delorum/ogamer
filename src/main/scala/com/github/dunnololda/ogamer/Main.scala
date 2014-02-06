@@ -11,17 +11,21 @@ import scala.concurrent.ExecutionContext.Implicits.global
 object Main extends Cli {
   programDescription = s"Ogame Controller v$appVersion"
   commandLineArgsAndParse(
-    ("u", "uni", "universe to log in", true, true),
-    ("l", "login", "login", true, true),
-    ("p", "pass", "password", true, true)
+    ("u", "uni", "ogame universe to log in", true, true),
+    ("l", "login", "ogame user login", true, true),
+    ("p", "pass", "ogame user password", true, true),
+    ("g", "gmail-login", "gmail login to send notifications to", true, true),
+    ("gp", "gmail-pass", "gmail password", true, true)
   )
 
   val uni = stringProperty("uni")
   val login = stringProperty("login")
   val pass = stringProperty("pass")
+  val gmail_login = stringProperty("gmail-login")
+  val gmail_pass = stringProperty("gmail-pass")
 
   private val system = ActorSystem("ogame")
-  system.actorOf(Props(new Master(uni, login, pass)), name = "master")
+  system.actorOf(Props(new Master(uni, login, pass, gmail_login, gmail_pass)), name = "master")
 
   Runtime.getRuntime.addShutdownHook(new Thread() {
     override def run() {
@@ -35,10 +39,11 @@ case object Overview
 case object EnterSite
 case object PerformLogin
 
-class Master(uni:String, login:String, pass:String) extends Actor {
+class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pass:String) extends Actor {
   private val log = MySimpleLogger(this.getClass.getName)
 
-  private val max_timeout_between_check_seconds = 20*60   // in seconds
+  private var max_timeout_between_check_seconds = 5*60   // in seconds
+  private var current_command_number = 0
 
   private val conn = new Conn
   private var is_logged_in = false
@@ -52,49 +57,163 @@ class Master(uni:String, login:String, pass:String) extends Actor {
     log.info(s"${self.path.toString} died!")
   }
 
+  private def buildMine(mine:String):Boolean = {
+    log.info(s"trying to build mine $mine")
+    conn.executeGet(s"http://$uni/game/index.php?page=resources")
+    ResourcesParser.parse(conn.currentHtml)
+    mine match {
+      case "metal" =>
+        if(ResourcesParser.metal_build_link.isEmpty) {
+          log.error("no metal mine build link found!")
+          false
+        } else {
+          log.info(s"metal mine build link: ${ResourcesParser.metal_build_link.info}")
+          conn.executeGet(ResourcesParser.metal_build_link.info)
+          true
+        }
+      case "crystal" =>
+        if(ResourcesParser.crystal_build_link.isEmpty) {
+          log.error("no crystal mine build link found!")
+          false
+        } else {
+          log.info(s"crystal mine build link: ${ResourcesParser.crystal_build_link.info}")
+          conn.executeGet(ResourcesParser.crystal_build_link.info)
+          true
+        }
+      case "deuterium" =>
+        if(ResourcesParser.deuterium_build_link.isEmpty) {
+          log.error("no deuterium mine build link found!")
+          false
+        } else {
+          log.info(s"deuterium mine build link: ${ResourcesParser.deuterium_build_link.info}")
+          conn.executeGet(ResourcesParser.deuterium_build_link.info)
+          true
+        }
+      case "electro" =>
+        if(ResourcesParser.electro_build_link.isEmpty) {
+          log.error("no electro mine build link found!")
+          false
+        } else {
+          log.info(s"electro mine build link: ${ResourcesParser.electro_build_link.info}")
+          conn.executeGet(ResourcesParser.electro_build_link.info)
+          true
+        }
+      case x =>
+        log.error(s"unknown mine: $x")
+        false
+    }
+  }
+
+  private def scheduleNextCheck() {
+    val random_wait_time = (math.random*max_timeout_between_check_seconds+1).toLong
+    log.info(s"performing next check in ${duration2str(random_wait_time)}")
+    context.system.scheduler.scheduleOnce(delay = random_wait_time.seconds) {
+      self ! Overview
+    }
+  }
+
   private def overviewCheck() {
     if(OverviewParser.isEmpty) {
       log.error("failed to obtain overview data. Trying to relogin")
       self ! EnterSite
     } else {
-      log.info(s"Resources: m ${OverviewParser.metal} : c ${OverviewParser.crystal} : d ${OverviewParser.deuterium}")
-      val limits_file = new java.io.File("limits")
-      if(limits_file.exists()) {
-        val lines = io.Source.fromFile("limits").getLines()
-        if(lines.hasNext) {
-          val limits = lines.next().split(":")
-          if(limits.length == 3) {
-            val metal_limit = str2intOrDefault(limits(0), 0)
-            val crystal_limit = str2intOrDefault(limits(1), 0)
-            val deuterium_limit = str2intOrDefault(limits(2), 0)
-            val need_to_reach_limit = metal_limit != 0 || crystal_limit != 0 || deuterium_limit != 0
-            if(need_to_reach_limit) {
-              val metal_limit_reached = metal_limit == 0 || OverviewParser.metal >= metal_limit
-              val crystal_limit_reached = crystal_limit == 0 || OverviewParser.crystal >= crystal_limit
-              val deuterium_limit_reached = deuterium_limit == 0 || OverviewParser.deuterium >= deuterium_limit
-              if(metal_limit_reached && crystal_limit_reached && deuterium_limit_reached) {
-                log.info(s"limit reached: ${OverviewParser.metal}/$metal_limit : ${OverviewParser.crystal}/$crystal_limit : ${OverviewParser.deuterium}/$deuterium_limit")
-                sendMailSimple("ogameinformer7@gmail.com", "ogame report", s"limit reached:\n${OverviewParser.metal}/$metal_limit : ${OverviewParser.crystal}/$crystal_limit : ${OverviewParser.deuterium}/$deuterium_limit")
-                limits_file.delete()
-              } else {
-                log.info(s"limit not reached: ${OverviewParser.metal}/$metal_limit : ${OverviewParser.crystal}/$crystal_limit : ${OverviewParser.deuterium}/$deuterium_limit")
-              }
-            } else {
-              log.error(s"limits file exists but no limits set: $limits")
+      log.info(s"Resources: m ${OverviewParser.metal.info} : c ${OverviewParser.crystal.info} : d ${OverviewParser.deuterium.info} : e ${OverviewParser.energy.info}")
+      val commands = loadCommands
+      if(commands.isEmpty) {
+        log.info("no commands found")
+        scheduleNextCheck()
+      } else {
+        if(current_command_number >= 0 && current_command_number < commands.length) {
+          val command = commands(current_command_number)
+          log.info(s"current command: $current_command_number : $command")
+          val command_split = command.split(" ")
+          if(command_split.length > 1) {
+            command_split(0) match {
+              case "limits" =>
+                val limits = command_split(1).split(":")
+                if(limits.length == 3) {
+                  val metal_limit = str2intOrDefault(limits(0), 0)
+                  val crystal_limit = str2intOrDefault(limits(1), 0)
+                  val deuterium_limit = str2intOrDefault(limits(2), 0)
+                  val need_to_reach_limit = metal_limit != 0 || crystal_limit != 0 || deuterium_limit != 0
+                  if(need_to_reach_limit) {
+                    val metal_limit_reached = metal_limit == 0 || OverviewParser.metal.info >= metal_limit
+                    val crystal_limit_reached = crystal_limit == 0 || OverviewParser.crystal.info >= crystal_limit
+                    val deuterium_limit_reached = deuterium_limit == 0 || OverviewParser.deuterium.info >= deuterium_limit
+                    if(metal_limit_reached && crystal_limit_reached && deuterium_limit_reached) {
+                      log.info(s"limits reached: ${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
+                      sendMailSimple(gmail_login, gmail_pass,
+                        "limits reached",
+                        s"${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
+                      current_command_number += 1
+                      overviewCheck()
+                    } else {
+                      log.info(s"limits not reached: ${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
+                      scheduleNextCheck()
+                    }
+                  } else {
+                    log.error(s"no limits set: $command")
+                    current_command_number += 1
+                    overviewCheck()
+                  }
+                } else {
+                  log.error(s"no limits set: $command")
+                  current_command_number += 1
+                  overviewCheck()
+                }
+              case "max-timeout-min" =>
+                val max_timeout_min = str2intOrDefault(command_split(1), 0)
+                if(max_timeout_min > 0) {
+                  log.info(s"set max timeout between checks to $max_timeout_min min")
+                  max_timeout_between_check_seconds = max_timeout_min*60
+                } else {
+                  log.error(s"wrong max-timeout-min param: $max_timeout_min, must be integer above zero")
+                }
+                current_command_number += 1
+                overviewCheck()
+              case "goto" =>
+                val goto = str2intOrDefault(command_split(1), -1)
+                if(goto >= 0 && goto != current_command_number) {
+                  log.info(s"going to $goto command")
+                  current_command_number = goto
+                } else {
+                  log.error(s"wrong goto command: $goto")
+                  current_command_number += 1
+                }
+                overviewCheck()
+              case "build-mine" =>
+                val mine = command_split(1)
+                val result = buildMine(mine)
+                if(result) current_command_number += 1
+                scheduleNextCheck()
+              case x =>
+                log.warn(s"unknown command: $command")
+                current_command_number += 1
+                overviewCheck()
             }
           } else {
-            log.error(s"limits file exists but no limits set: $limits")
+            log.warn(s"unknown command: $command")
+            current_command_number += 1
+            overviewCheck()
           }
         } else {
-          log.error(s"limits file exists but has no content")
+          log.warn(s"no command on line $current_command_number")
+          scheduleNextCheck()
         }
-      } else {
-        log.info("no limits set")
       }
-      val random_wait_time = (math.random*max_timeout_between_check_seconds+1).toLong
-      log.info(s"performing next check in ${duration2str(random_wait_time)}")
-      context.system.scheduler.scheduleOnce(delay = random_wait_time.seconds) {
-        self ! Overview
+    }
+  }
+
+  private def loadCommands:Array[String] = {
+    val commands_file = new java.io.File("commands")
+    if(!commands_file.exists()) Array()
+    else {
+      try {
+        io.Source.fromFile("commands").getLines().toArray
+      } catch {
+        case t:Throwable =>
+          log.error(s"failed to load existing commands file: $t")
+          Array()
       }
     }
   }
@@ -135,7 +254,10 @@ class Master(uni:String, login:String, pass:String) extends Actor {
         overviewCheck()
       } else {
         log.error("failed to login")
-        sendMailSimple("ogameinformer7@gmail.com", "ogame report", "failed to login!")
+        log.error(s"current html:\n${conn.currentHtml}")
+        sendMailSimple(gmail_login, gmail_pass,
+          "failed to login!",
+          "failed to login!")
         context.system.shutdown()
       }
   }

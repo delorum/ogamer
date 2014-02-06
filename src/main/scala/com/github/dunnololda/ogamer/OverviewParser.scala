@@ -6,67 +6,77 @@ import org.ccil.cowan.tagsoup.Parser
 import java.io.StringReader
 import com.github.dunnololda.cli.MySimpleLogger
 
+class IntObtainer extends InfoObtainer[Int] {
+  private var _info:Int = 0
+  def info: Int = _info
+
+  def obtainer2info() {
+    _info = str2intOrDefault(info_obtainer.toString().trim(), 0)
+  }
+
+  def clearInfo() {
+    _info = 0
+  }
+
+  def nonEmpty:Boolean = {
+    _info != 0
+  }
+}
+
 object OverviewParser extends DefaultHandler {
   private val log = MySimpleLogger(this.getClass.getName)
 
-  private var metal_obtained = false
-  private val metal_str = new StringBuilder
-  var metal:Int = 0
+  val metal = new IntObtainer
+  val crystal = new IntObtainer
+  val deuterium = new IntObtainer
+  val energy = new IntObtainer
 
-  private var crystal_obtained = false
-  private val crystal_str = new StringBuilder
-  var crystal:Int = 0
-
-  private var deuterium_obtained = false
-  private val deuterium_str = new StringBuilder
-  var deuterium:Int = 0
+  val all_obtainers = List(metal, crystal, deuterium, energy)
 
   override def startDocument() {
-    metal = 0
-    metal_str.clear()
-
-    crystal = 0
-    crystal_str.clear()
-
-    deuterium = 0
-    deuterium_str.clear()
+    all_obtainers.foreach(_.init())
   }
 
   override def startElement(uri:String, local_name:String, raw_name:String, amap:Attributes) {
     if ("span".equalsIgnoreCase(raw_name) && "resources_metal" == amap.getValue("id")) {
-       metal_obtained = true
+       metal.info_obtain_started = true
     } else if ("span".equalsIgnoreCase(raw_name) && "resources_crystal" == amap.getValue("id")) {
-      crystal_obtained = true
+      crystal.info_obtain_started = true
     } else if ("span".equalsIgnoreCase(raw_name) && "resources_deuterium" == amap.getValue("id")) {
-      deuterium_obtained = true
+      deuterium.info_obtain_started = true
+    } else if ("span".equalsIgnoreCase(raw_name) && "resources_energy" == amap.getValue("id")) {
+      energy.info_obtain_started = true
     }
   }
 
   override def characters(ch:Array[Char], start:Int, length:Int) {
     val value = new String(ch, start, length)
-    if(metal_obtained) {
-      metal_str.append(value)
-    } else if(crystal_obtained) {
-      crystal_str.append(value)
-    } else if(deuterium_obtained) {
-      deuterium_str.append(value)
+    if(metal.info_obtain_started) {
+      metal.append(value)
+    } else if(crystal.info_obtain_started) {
+      crystal.append(value)
+    } else if(deuterium.info_obtain_started) {
+      deuterium.append(value)
+    } else if(energy.info_obtain_started) {
+      energy.append(value)
     }
   }
 
   override def endElement(uri:String, local_name:String, raw_name:String) {
-    if ("span".equalsIgnoreCase(raw_name) && metal_obtained) {
-      metal_obtained = false
-      metal = str2intOrDefault(metal_str.toString(), metal)
-    } else if ("span".equalsIgnoreCase(raw_name) && crystal_obtained) {
-      crystal_obtained = false
-      crystal = str2intOrDefault(crystal_str.toString(), crystal)
-    } else if ("span".equalsIgnoreCase(raw_name) && deuterium_obtained) {
-      deuterium_obtained = false
-      deuterium = str2intOrDefault(deuterium_str.toString(), deuterium)
+    if ("span".equalsIgnoreCase(raw_name) && metal.info_obtain_started) {
+      metal.info_obtain_started = false
+    } else if ("span".equalsIgnoreCase(raw_name) && crystal.info_obtain_started) {
+      crystal.info_obtain_started = false
+    } else if ("span".equalsIgnoreCase(raw_name) && deuterium.info_obtain_started) {
+      deuterium.info_obtain_started = false
+    } else if ("span".equalsIgnoreCase(raw_name) && energy.info_obtain_started) {
+      energy.info_obtain_started = false
     }
   }
 
-  override def endDocument() {}
+  override def endDocument() {
+    all_obtainers.foreach(_.obtainer2info())
+  }
 
   private val parser = new Parser
   parser.setContentHandler(this)
@@ -74,14 +84,8 @@ object OverviewParser extends DefaultHandler {
     parser.parse(new InputSource(new StringReader(html)))
   }
 
-  def clear() {
-    metal = 0
-    crystal = 0
-    deuterium = 0
-  }
-
   def nonEmpty:Boolean = {
-    metal != 0 || crystal != 0 || deuterium != 0
+    all_obtainers.exists(_.nonEmpty)
   }
 
   def isEmpty:Boolean = !nonEmpty

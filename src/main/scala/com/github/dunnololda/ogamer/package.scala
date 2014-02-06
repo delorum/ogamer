@@ -43,19 +43,25 @@ package object ogamer {
       .send()
   }
 
-  def sendMailSimple(email:String, subject:String, text:String) {
-    sendEmailSync(EmailMessage(
-      subject = subject,
-      recipient = email,
-      from = "ogameinformer7@gmail.com",
-      text = " ",
-      html = text,
-      smtpConfig = SmtpConfig(
-        tls = true, ssl = false, host = "smtp.gmail.com", port=  587, user = "ogameinformer7", password = "lienajava"
-      ),
-      retryOn = 1.minute,
-      deliveryAttempts = 5
-    ))
+  def sendMailSimple(gmail_login:String, gmail_pass:String, subject:String, text:String) {
+    log.info(s"sending email: $subject : $text")
+    try {
+      sendEmailSync(EmailMessage(
+        subject = subject,
+        recipient = s"$gmail_login@gmail.com",
+        from = s"$gmail_login@gmail.com",
+        text = " ",
+        html = text,
+        smtpConfig = SmtpConfig(
+          tls = true, ssl = false, host = "smtp.gmail.com", port=  587, user = gmail_login, password = gmail_pass
+        ),
+        retryOn = 1.minute,
+        deliveryAttempts = 5
+      ))
+    } catch {
+      case t:Throwable =>
+        log.error(s"failed to send email: $t")
+    }
   }
 
   def str2intOrDefault(str:String, default:Int):Int = {
