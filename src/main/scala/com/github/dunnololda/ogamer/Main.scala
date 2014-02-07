@@ -45,7 +45,7 @@ class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pa
   private var max_timeout_between_check_seconds = 5*60   // in seconds
   private var current_command_number = 0
 
-  private val conn = new Conn
+  private implicit val conn = new Conn
   private var is_logged_in = false
 
   override def preStart() {
@@ -61,47 +61,14 @@ class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pa
     log.info(s"trying to build mine $mine")
     conn.executeGet(s"http://$uni/game/index.php?page=resources")
     ResourcesParser.parse(conn.currentHtml)
-    mine match {
-      case "metal" =>
-        if(ResourcesParser.metal_build_link.isEmpty) {
-          log.error("no metal mine build link found!")
-          false
-        } else {
-          log.info(s"metal mine build link: ${ResourcesParser.metal_build_link.info}")
-          conn.executeGet(ResourcesParser.metal_build_link.info)
-          true
-        }
-      case "crystal" =>
-        if(ResourcesParser.crystal_build_link.isEmpty) {
-          log.error("no crystal mine build link found!")
-          false
-        } else {
-          log.info(s"crystal mine build link: ${ResourcesParser.crystal_build_link.info}")
-          conn.executeGet(ResourcesParser.crystal_build_link.info)
-          true
-        }
-      case "deuterium" =>
-        if(ResourcesParser.deuterium_build_link.isEmpty) {
-          log.error("no deuterium mine build link found!")
-          false
-        } else {
-          log.info(s"deuterium mine build link: ${ResourcesParser.deuterium_build_link.info}")
-          conn.executeGet(ResourcesParser.deuterium_build_link.info)
-          true
-        }
-      case "electro" =>
-        if(ResourcesParser.electro_build_link.isEmpty) {
-          log.error("no electro mine build link found!")
-          false
-        } else {
-          log.info(s"electro mine build link: ${ResourcesParser.electro_build_link.info}")
-          conn.executeGet(ResourcesParser.electro_build_link.info)
-          true
-        }
-      case x =>
-        log.error(s"unknown mine: $x")
-        false
-    }
+    ResourcesParser.build(mine)
+  }
+
+  private def buildStation(station:String):Boolean = {
+    log.info(s"trying to build mine $station")
+    conn.executeGet(s"http://$uni/game/index.php?page=station")
+    StationParser.parse(conn.currentHtml)
+    StationParser.build(station)
   }
 
   private def scheduleNextCheck() {
@@ -186,6 +153,14 @@ class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pa
                 val result = buildMine(mine)
                 if(result) current_command_number += 1
                 scheduleNextCheck()
+              case "build-station" =>
+                val mine = command_split(1)
+                val result = buildStation(mine)
+                if(result) current_command_number += 1
+                scheduleNextCheck()
+              case "quit" =>
+                log.info("going to shutdown")
+                context.system.shutdown()
               case x =>
                 log.warn(s"unknown command: $command")
                 current_command_number += 1
