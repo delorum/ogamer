@@ -71,6 +71,13 @@ class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pa
     StationParser.build(station)
   }
 
+  private def research(tech:String):Boolean = {
+    log.info(s"trying to research $tech")
+    conn.executeGet(s"http://$uni/game/index.php?page=research")
+    ResearchParser.parse(conn.currentHtml)
+    ResearchParser.research(tech)
+  }
+
   private def scheduleNextCheck() {
     val random_wait_time = (math.random*max_timeout_between_check_seconds+1).toLong
     log.info(s"performing next check in ${duration2str(random_wait_time)}")
@@ -156,6 +163,11 @@ class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pa
               case "build-station" =>
                 val mine = command_split(1)
                 val result = buildStation(mine)
+                if(result) current_command_number += 1
+                scheduleNextCheck()
+              case "research" =>
+                val tech = command_split(1)
+                val result = research(tech)
                 if(result) current_command_number += 1
                 scheduleNextCheck()
               case "quit" =>
