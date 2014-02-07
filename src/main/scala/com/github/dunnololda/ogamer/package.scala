@@ -44,7 +44,7 @@ package object ogamer {
   }
 
   def sendMailSimple(gmail_login:String, gmail_pass:String, subject:String, text:String) {
-    log.info(s"sending email: $subject : $text")
+    log.info(s"sending email:\n$subject\n$text")
     try {
       sendEmailSync(EmailMessage(
         subject = subject,
