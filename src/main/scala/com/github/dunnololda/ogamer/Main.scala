@@ -116,9 +116,11 @@ class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pa
                     val deuterium_limit_reached = deuterium_limit == 0 || OverviewParser.deuterium.info >= deuterium_limit
                     if(metal_limit_reached && crystal_limit_reached && deuterium_limit_reached) {
                       log.info(s"limits reached: ${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
-                      sendMailSimple(gmail_login, gmail_pass,
-                        "limits reached",
-                        s"${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
+                      if(command_split.length > 2 && "mail" == command_split(2)) {
+                        sendMailSimple(gmail_login, gmail_pass,
+                          "limits reached",
+                          s"${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
+                      }
                       current_command_number += 1
                       overviewCheck()
                     } else {
@@ -158,17 +160,38 @@ class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pa
               case "build-mine" =>
                 val mine = command_split(1)
                 val result = buildMine(mine)
-                if(result) current_command_number += 1
+                if(result) {
+                  if(command_split.length > 2 && "mail" == command_split(2)) {
+                    sendMailSimple(gmail_login, gmail_pass,
+                      "started to build mine",
+                      s"started to build mine $mine")
+                  }
+                  current_command_number += 1
+                }
                 scheduleNextCheck()
               case "build-station" =>
-                val mine = command_split(1)
-                val result = buildStation(mine)
-                if(result) current_command_number += 1
+                val station = command_split(1)
+                val result = buildStation(station)
+                if(result) {
+                  if(command_split.length > 2 && "mail" == command_split(2)) {
+                    sendMailSimple(gmail_login, gmail_pass,
+                      "started to build station",
+                      s"started to build station $station")
+                  }
+                  current_command_number += 1                  
+                }
                 scheduleNextCheck()
               case "research" =>
                 val tech = command_split(1)
                 val result = research(tech)
-                if(result) current_command_number += 1
+                if(result) {
+                  if(command_split.length > 2 && "mail" == command_split(2)) {
+                    sendMailSimple(gmail_login, gmail_pass,
+                      "started to research tech",
+                      s"started to research tech $tech")
+                  }
+                  current_command_number += 1
+                }
                 scheduleNextCheck()
               case "quit" =>
                 log.info("going to shutdown")
