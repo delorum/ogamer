@@ -38,9 +38,7 @@ object OverviewParser extends DefaultHandler {
   }
 
   override def startElement(uri:String, local_name:String, raw_name:String, amap:Attributes) {
-    if ("div".equalsIgnoreCase(raw_name) && "message-wrapper" == amap.getValue("id")) {
-      metal.info_obtain_started = true
-    } else if ("span".equalsIgnoreCase(raw_name) && "resources_metal" == amap.getValue("id")) {
+    if ("span".equalsIgnoreCase(raw_name) && "resources_metal" == amap.getValue("id")) {
        metal.info_obtain_started = true
     } else if ("span".equalsIgnoreCase(raw_name) && "resources_crystal" == amap.getValue("id")) {
       crystal.info_obtain_started = true
