@@ -49,7 +49,7 @@ class BuildLinkObtainer extends StringObtainer {
   private val log = MySimpleLogger(this.getClass.getName)
 
   override def obtainer2info() {
-    val test = info_obtainer.toString().trim().replace("\n", "").replace("sendBuildRequest('", "").replace("', null, 1);", "")
+    val test = info_obtainer.toString().trim().replace("\n", "").dropWhile(_ != '\'').dropWhile(_ == '\'').takeWhile(_ != '\'')
     try {
       new java.net.URI(test)
       _info = test

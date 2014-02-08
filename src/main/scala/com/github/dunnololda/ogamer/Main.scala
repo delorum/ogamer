@@ -195,7 +195,23 @@ class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pa
                 scheduleNextCheck()
               case "quit" =>
                 log.info("going to shutdown")
+                sendMailSimple(gmail_login, gmail_pass,
+                  "going to shutdown",
+                  "going to shutdown")
                 context.system.shutdown()
+              case x =>
+                log.warn(s"unknown command: $command")
+                current_command_number += 1
+                overviewCheck()
+            }
+          } else if(command_split.length > 0) {
+            command_split(0) match {
+              case "quit" =>
+                log.info("going to shutdown")
+                sendMailSimple(gmail_login, gmail_pass,
+                  "going to shutdown",
+                  "going to shutdown")
+                 context.system.shutdown()
               case x =>
                 log.warn(s"unknown command: $command")
                 current_command_number += 1
