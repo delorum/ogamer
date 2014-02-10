@@ -66,7 +66,7 @@ package object ogamer {
 
   def str2intOrDefault(str:String, default:Int):Int = {
     try {
-      str.trim.filterNot(_ == '.').toInt
+      str.trim.replaceAll("\\.", "").toInt
     } catch {
       case t:Throwable =>
         log.info(s"failed to parse $str as int: $t")

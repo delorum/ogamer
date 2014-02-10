@@ -2,7 +2,6 @@ package com.github.dunnololda.ogamer
 
 import com.github.dunnololda.conn.Conn
 import org.json.JSONObject
-import scala.collection.JavaConversions._
 import com.github.dunnololda.cli.Imports._
 import akka.actor.{Props, Actor, ActorSystem}
 import concurrent.duration._
@@ -65,7 +64,7 @@ class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pa
   }
 
   private def buildStation(station:String):Boolean = {
-    log.info(s"trying to build mine $station")
+    log.info(s"trying to build station $station")
     conn.executeGet(s"http://$uni/game/index.php?page=station")
     StationParser.parse(conn.currentHtml)
     StationParser.build(station)
@@ -76,6 +75,22 @@ class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pa
     conn.executeGet(s"http://$uni/game/index.php?page=research")
     ResearchParser.parse(conn.currentHtml)
     ResearchParser.research(tech)
+  }
+
+  private def buildShip(ship:String):Boolean = {
+    log.info(s"trying to build $ship")
+    conn.executeGet(s"http://$uni/game/index.php?page=shipyard")
+    ship match {
+      case "light-interceptor" =>
+        conn.addHeader("X-Requested-With", "XMLHttpRequest")
+        val ship_type = new JSONObject()
+        ship_type.put("type", 204)
+        conn.addPostData(ship_type)
+      case x =>
+        log.warn(s"unknown ship: $x")
+        false
+    }
+    false
   }
 
   private def scheduleNextCheck() {
@@ -244,6 +259,25 @@ class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pa
     }
   }
 
+  private def attackCheck() {
+    if(OverviewParser.under_attack) {
+      log.info("found ongoing attack!")
+      sendMailSimple(gmail_login, gmail_pass,
+        "ongoing attack!",
+        "ongoing attack!")
+    }
+  }
+
+  private def newMessagesCheck() {
+    if(OverviewParser.new_messages.info > OverviewParser.previous_new_messages) {
+      val diff = OverviewParser.new_messages.info - OverviewParser.previous_new_messages
+      log.info(s"found new messages: $diff")
+      sendMailSimple(gmail_login, gmail_pass,
+        "new messages",
+        s"new _messages: $diff")
+    }
+  }
+
   def receive = {
     case Overview =>
       if(!is_logged_in) {
@@ -253,6 +287,8 @@ class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pa
         log.info("performing check")
         conn.executeGet(s"http://$uni/game/index.php?page=overview")
         OverviewParser.parse(conn.currentHtml)
+        attackCheck()
+        newMessagesCheck()
         overviewCheck()
       }
     case EnterSite =>
@@ -277,6 +313,8 @@ class Master(uni:String, login:String, pass:String, gmail_login:String, gmail_pa
       if(OverviewParser.nonEmpty) {
         log.info("logged in")
         is_logged_in = true
+        attackCheck()
+        newMessagesCheck()
         overviewCheck()
       } else {
         log.error("failed to login")

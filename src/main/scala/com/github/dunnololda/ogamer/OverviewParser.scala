@@ -7,7 +7,7 @@ import java.io.StringReader
 import com.github.dunnololda.cli.MySimpleLogger
 
 class IntObtainer extends InfoObtainer[Int] {
-  private var _info:Int = 0
+  protected var _info:Int = 0
   def info: Int = _info
 
   def obtainer2info() {
@@ -30,14 +30,25 @@ object OverviewParser extends DefaultHandler {
   val crystal = new IntObtainer
   val deuterium = new IntObtainer
   val energy = new IntObtainer
+  var under_attack = false
 
-  val all_obtainers = List(metal, crystal, deuterium, energy)
+  var previous_new_messages = 0
+  val new_messages = new IntObtainer
+
+  val all_obtainers = List(metal, crystal, deuterium, energy, new_messages)
 
   override def startDocument() {
+    previous_new_messages = new_messages.info
     all_obtainers.foreach(_.init())
   }
 
   override def startElement(uri:String, local_name:String, raw_name:String, amap:Attributes) {
+    if ("div".equalsIgnoreCase(raw_name) && "attack_alert" == amap.getValue("id")) {
+      under_attack = amap.getValue("class") != null && !amap.getValue("class").split(" ").contains("noAttack")
+    }
+    if ("a".equalsIgnoreCase(raw_name) && "message_alert_box" == amap.getValue("id")) {
+      new_messages.info_obtain_started = true
+    }
     if ("span".equalsIgnoreCase(raw_name) && "resources_metal" == amap.getValue("id")) {
        metal.info_obtain_started = true
     } else if ("span".equalsIgnoreCase(raw_name) && "resources_crystal" == amap.getValue("id")) {
@@ -59,6 +70,8 @@ object OverviewParser extends DefaultHandler {
       deuterium.append(value)
     } else if(energy.info_obtain_started) {
       energy.append(value)
+    } else if(new_messages.info_obtain_started) {
+      new_messages.append(value)
     }
   }
 
@@ -71,6 +84,8 @@ object OverviewParser extends DefaultHandler {
       deuterium.info_obtain_started = false
     } else if ("span".equalsIgnoreCase(raw_name) && energy.info_obtain_started) {
       energy.info_obtain_started = false
+    } else if ("span".equalsIgnoreCase(raw_name) && new_messages.info_obtain_started) {
+      new_messages.info_obtain_started = false
     }
   }
 
