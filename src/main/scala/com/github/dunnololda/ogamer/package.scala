@@ -64,12 +64,12 @@ package object ogamer {
     }
   }
 
-  def str2intOrDefault(str:String, default:Int):Int = {
+  def str2intOrDefault(str:String, default:Int, without_warning:Boolean = false):Int = {
     try {
       str.trim.replaceAll("\\.", "").toInt
     } catch {
       case t:Throwable =>
-        log.info(s"failed to parse $str as int: $t")
+        if(!without_warning) log.info(s"failed to parse $str as int: $t")
         default
     }
   }

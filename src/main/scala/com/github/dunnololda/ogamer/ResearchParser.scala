@@ -135,7 +135,11 @@ object ResearchParser extends DefaultHandler {
     "shield" -> (shield_tech_research_link, "shield tech"),
     "armor" -> (armor_tech_research_link, "armor tech")
   )
-  def research(tech:String)(implicit conn:Conn):Boolean = {
+
+  def research(tech:String)(implicit conn:Conn, uni:String):Boolean = {
+    log.info(s"trying to research $tech")
+    conn.executeGet(s"http://$uni/game/index.php?page=research")
+    parse(conn.currentHtml)
     techs.get(tech) match {
       case Some((link, tech_info)) =>
         if(link.isEmpty) {

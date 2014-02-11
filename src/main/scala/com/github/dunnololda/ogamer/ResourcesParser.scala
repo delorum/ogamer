@@ -151,7 +151,6 @@ object ResourcesParser extends DefaultHandler {
 
   def isEmpty:Boolean = !nonEmpty
 
-
   val buildings = Map(
     "metal" -> (metal_build_link, "metal mine"),
     "crystal" -> (crystal_build_link, "crystal mine"),
@@ -168,7 +167,11 @@ object ResourcesParser extends DefaultHandler {
     "crystal-shelter" -> (crystal_shelter_build_link, "metal shelter"),
     "deuterium-shelter" -> (deuterium_shelter_build_link, "metal shelter")
   )
-  def build(mine:String)(implicit conn:Conn):Boolean = {
+
+  def buildMine(mine:String)(implicit conn:Conn, uni:String):Boolean = {
+    log.info(s"trying to build mine $mine")
+    conn.executeGet(s"http://$uni/game/index.php?page=resources")
+    parse(conn.currentHtml)
     buildings.get(mine) match {
       case Some((link, building_info)) =>
         if(link.isEmpty) {

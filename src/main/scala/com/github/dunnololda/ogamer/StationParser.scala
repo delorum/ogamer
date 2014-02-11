@@ -87,7 +87,11 @@ object StationParser extends DefaultHandler {
     "nanits" -> (nanits_build_link, "nanits"),
     "terraformer" -> (terraformer_build_link, "terraformer")
   )
-  def build(station:String)(implicit conn:Conn):Boolean = {
+
+  def buildStation(station:String)(implicit conn:Conn, uni:String):Boolean = {
+    log.info(s"trying to build station $station")
+    conn.executeGet(s"http://$uni/game/index.php?page=station")
+    parse(conn.currentHtml)
     stations.get(station) match {
       case Some((link, station_info)) =>
         if(link.isEmpty) {
