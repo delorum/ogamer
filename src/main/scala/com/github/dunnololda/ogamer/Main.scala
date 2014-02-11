@@ -104,7 +104,23 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
         val command = commands(current_command_number)
         log.info(s"current command: $current_command_number : $command")
         val command_split = command.split(" ")
-        if(command_split.length > 1) {
+        if(command_split.length > 2) {
+          command_split(0) match {
+            case "build-ship" =>
+              val ship = command_split(1)
+              val amount = str2intOrDefault(command_split(2), 0)
+              val result = ShipyardParser.buildShip(ship, amount)
+              if(result) {
+                if(command_split.length > 3 && "mail" == command_split(3)) {
+                  sendMailSimple(gmail_login, gmail_pass,
+                    "started to build ship",
+                    s"started to build ship $ship")
+                }
+                current_command_number += 1
+              }
+              scheduleNextCheck()
+          }
+        } else if(command_split.length > 1) {
           command_split(0) match {
             case "limits" =>
               val limits = command_split(1).split(":")
