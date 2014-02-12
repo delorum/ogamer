@@ -37,8 +37,11 @@ object StationParser extends DefaultHandler {
     "station33" -> terraformer_build_link
   )
 
+  var login_indicator = false
+
   override def startDocument() {
     all_obtainers.foreach(_.init())
+    login_indicator = false
   }
 
   override def startElement(uri:String, local_name:String, raw_name:String, amap:Attributes) {
@@ -50,6 +53,10 @@ object StationParser extends DefaultHandler {
       if ("a".equalsIgnoreCase(raw_name) && amap.getValue("class") != null && amap.getValue("class").split(" ").contains("fastBuild") && amap.getValue("onclick") != null) {
         all_obtainers.find(_.info_obtain_started).foreach(_.append(amap.getValue("onclick")))
       }
+    }
+
+    if("li".equalsIgnoreCase(raw_name) && "playerName" == amap.getValue("id")) {
+      login_indicator = true
     }
   }
 

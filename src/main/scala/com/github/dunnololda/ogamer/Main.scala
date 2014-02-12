@@ -42,13 +42,13 @@ case object Resources
 case object Station
 case object Research
 case object Shipyard
-case object Defence
+case object Defense
 case object Fleet
 
 class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(implicit uni:String) extends Actor {
   private val log = MySimpleLogger(this.getClass.getName)
 
-  private val all_pages = List(Overview, Resources, Station, Research, Shipyard, Defence, Fleet)
+  private val all_pages = List(Overview, Resources, Station, Research, Shipyard, Defense, Fleet)
   def randomPage = {
     if(math.random < 0.3) Overview
     else all_pages((math.random*all_pages.length).toInt)
@@ -69,23 +69,6 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
     log.info(s"${self.path.toString} died!")
   }
 
-  private def buildShip(ship:String):Boolean = {
-    log.info(s"trying to build $ship")
-    conn.executeGet(s"http://$uni/game/index.php?page=shipyard")
-    ship match {
-      case "light-interceptor" =>
-        conn.addHeader("X-Requested-With", "XMLHttpRequest")
-        val ship_type = new JSONObject()
-        ship_type.put("type", 204)
-        conn.addPostData(ship_type)
-        conn.executePost(s"http://$uni/game/index.php?page=shipyard&ajax=1")
-      case x =>
-        log.warn(s"unknown ship: $x")
-        false
-    }
-    false
-  }
-
   private def scheduleNextCheck() {
     val random_wait_time = (math.random*max_timeout_between_check_seconds+1).toLong
     log.info(s"performing next check in ${duration2str(random_wait_time)}")
@@ -102,7 +85,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
     } else {
       if(current_command_number >= 0 && current_command_number < commands.length) {
         val command = commands(current_command_number)
-        log.info(s"current command: $current_command_number : $command")
+        log.info(s"current command: ${current_command_number+1} : $command")
         val command_split = command.split(" ")
         if(command_split.length > 2) {
           command_split(0) match {
@@ -119,6 +102,23 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
                 current_command_number += 1
               }
               scheduleNextCheck()
+            case "build-defense" =>
+              val defense = command_split(1)
+              val amount = str2intOrDefault(command_split(2), 0)
+              val result = DefenseParser.buildDefense(defense, amount)
+              if(result) {
+                if(command_split.length > 3 && "mail" == command_split(3)) {
+                  sendMailSimple(gmail_login, gmail_pass,
+                    "started to build defense",
+                    s"started to build defense $defense")
+                }
+                current_command_number += 1
+              }
+              scheduleNextCheck()
+            case x =>
+              log.warn(s"unknown command: $command")
+              current_command_number += 1
+              commandsCheck()
           }
         } else if(command_split.length > 1) {
           command_split(0) match {
@@ -168,9 +168,9 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
               commandsCheck()
             case "goto" =>
               val goto = str2intOrDefault(command_split(1), -1)
-              if(goto >= 0 && goto != current_command_number) {
+              if(goto >= 1 && goto != current_command_number) {
                 log.info(s"going to $goto command")
-                current_command_number = goto
+                current_command_number = goto-1
               } else {
                 log.error(s"wrong goto command: $goto")
                 current_command_number += 1
@@ -242,7 +242,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
           commandsCheck()
         }
       } else {
-        log.warn(s"no command on line $current_command_number")
+        log.warn(s"no command on line ${current_command_number+1}")
         scheduleNextCheck()
       }
     }
@@ -337,33 +337,69 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
       }
     case Resources =>
       conn.executeGet(s"http://$uni/game/index.php?page=resources")
-      context.system.scheduler.scheduleOnce(delay = 5.seconds) {
-        self ! randomPage
+      ResourcesParser.parse(conn.currentHtml)
+      if(ResourcesParser.login_indicator) {
+        context.system.scheduler.scheduleOnce(delay = 5.seconds) {
+          self ! randomPage
+        }
+      } else {
+        log.error("it seems we need to relogin")
+        self ! EnterSite
       }
     case Station =>
       conn.executeGet(s"http://$uni/game/index.php?page=station")
-      context.system.scheduler.scheduleOnce(delay = 5.seconds) {
-        self ! randomPage
+      StationParser.parse(conn.currentHtml)
+      if(StationParser.login_indicator) {
+        context.system.scheduler.scheduleOnce(delay = 5.seconds) {
+          self ! randomPage
+        }
+      } else {
+        log.error("it seems we need to relogin")
+        self ! EnterSite
       }
     case Research =>
       conn.executeGet(s"http://$uni/game/index.php?page=research")
-      context.system.scheduler.scheduleOnce(delay = 5.seconds) {
-        self ! randomPage
+      ResearchParser.parse(conn.currentHtml)
+      if(ResearchParser.login_indicator) {
+        context.system.scheduler.scheduleOnce(delay = 5.seconds) {
+          self ! randomPage
+        }
+      } else {
+        log.error("it seems we need to relogin")
+        self ! EnterSite
       }
     case Shipyard =>
       conn.executeGet(s"http://$uni/game/index.php?page=shipyard")
-      context.system.scheduler.scheduleOnce(delay = 5.seconds) {
-        self ! randomPage
+      ShipyardParser.parse(conn.currentHtml)
+      if(ShipyardParser.login_indicator) {
+        context.system.scheduler.scheduleOnce(delay = 5.seconds) {
+          self ! randomPage
+        }
+      } else {
+        log.error("it seems we need to relogin")
+        self ! EnterSite
       }
-    case Defence =>
-      conn.executeGet(s"http://$uni/game/index.php?page=defence")
-      context.system.scheduler.scheduleOnce(delay = 5.seconds) {
-        self ! randomPage
+    case Defense =>
+      conn.executeGet(s"http://$uni/game/index.php?page=defense")
+      DefenseParser.parse(conn.currentHtml)
+      if(DefenseParser.login_indicator) {
+        context.system.scheduler.scheduleOnce(delay = 5.seconds) {
+          self ! randomPage
+        }
+      } else {
+        log.error("it seems we need to relogin")
+        self ! EnterSite
       }
     case Fleet =>
       conn.executeGet(s"http://$uni/game/index.php?page=fleet1")
-      context.system.scheduler.scheduleOnce(delay = 5.seconds) {
-        self ! randomPage
+      FleetParser.parse(conn.currentHtml)
+      if(FleetParser.login_indicator) {
+        context.system.scheduler.scheduleOnce(delay = 5.seconds) {
+          self ! randomPage
+        }
+      } else {
+        log.error("it seems we need to relogin")
+        self ! EnterSite
       }
   }
 }

@@ -74,6 +74,10 @@ package object ogamer {
     }
   }
 
+  def deletion(op1:Int, op2:Int):Int = {
+    if(op2 != 0) op1/op2 else Int.MaxValue
+  }
+
   def duration2str(duration_sec:Long):String = {
     if (duration_sec <= 0) "0 sec"
     else {
