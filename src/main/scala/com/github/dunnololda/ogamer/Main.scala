@@ -277,7 +277,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
       log.info(s"found new messages: $diff")
       sendMailSimple(gmail_login, gmail_pass,
         "new messages",
-        s"new _messages: $diff")
+        s"new _messages: $diff\noverall messages: ${OverviewParser.new_messages.info}")
     }
   }
 
