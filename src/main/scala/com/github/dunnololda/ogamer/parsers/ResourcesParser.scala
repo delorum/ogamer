@@ -1,4 +1,4 @@
-package com.github.dunnololda.ogamer
+package com.github.dunnololda.ogamer.parsers
 
 import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.{InputSource, Attributes}
@@ -10,7 +10,7 @@ import com.github.dunnololda.conn.Conn
 abstract class InfoObtainer[T] {
   def info:T
   def obtainer2info()
-  def clearInfo()
+  protected def clearInfo()
   def nonEmpty:Boolean
   def isEmpty = !nonEmpty
 
@@ -38,7 +38,7 @@ class StringObtainer extends InfoObtainer[String] {
     _info = info_obtainer.toString()
   }
 
-  def clearInfo() {
+  protected def clearInfo() {
     _info = ""
   }
 

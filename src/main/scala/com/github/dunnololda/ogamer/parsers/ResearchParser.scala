@@ -1,4 +1,4 @@
-package com.github.dunnololda.ogamer
+package com.github.dunnololda.ogamer.parsers
 
 import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.{InputSource, Attributes}

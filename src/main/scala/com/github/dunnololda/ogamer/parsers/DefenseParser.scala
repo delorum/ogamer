@@ -1,4 +1,4 @@
-package com.github.dunnololda.ogamer
+package com.github.dunnololda.ogamer.parsers
 
 import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.{InputSource, Attributes}
@@ -8,6 +8,7 @@ import com.github.dunnololda.cli.MySimpleLogger
 import com.github.dunnololda.conn.Conn
 import org.json.JSONObject
 import scala.collection.mutable
+import com.github.dunnololda.ogamer._
 
 object DefenseParser extends DefaultHandler {
   private val log = MySimpleLogger(this.getClass.getName)
@@ -48,6 +49,12 @@ object DefenseParser extends DefaultHandler {
 
   var login_indicator = false
 
+  private def defensesInit() {
+    defenses.foreach {
+      case (defense, defense_data) => defenses(defense) = defense_data.copy(defense_availability = "unknown")
+    }
+  }
+
   override def startDocument() {
     token = ""
     defence_obtain_started = false
@@ -63,7 +70,7 @@ object DefenseParser extends DefaultHandler {
     }
     if("li".equalsIgnoreCase(raw_name) && defence_obtain_started) {
       if(amap.getValue("id") != null && amap.getValue("class") != null) {
-        defense_mapping.get(s"${amap.getValue("id")}").foreach(defense_name => {
+        defense_mapping.get(amap.getValue("id")).foreach(defense_name => {
           defenses(defense_name) = defenses(defense_name).copy(defense_availability = amap.getValue("class"))
         })
       }
@@ -118,10 +125,10 @@ object DefenseParser extends DefaultHandler {
               } else {
                 val available_amount = math.min(
                   math.min(
-                    deletion(OverviewParser.metal.info,   metal),
-                    deletion(OverviewParser.crystal.info, crystal)
+                    safeDelete(OverviewParser.metal.info,   metal),
+                    safeDelete(OverviewParser.crystal.info, crystal)
                   ),
-                  deletion(OverviewParser.deuterium.info, deuterium)
+                  safeDelete(OverviewParser.deuterium.info, deuterium)
                 )
                 if(available_amount == 0) {
                   log.warn(s"unable to build any of $defense. Unsufficient amount of resources: ${OverviewParser.metal.info}/$metal : ${OverviewParser.crystal.info}/$crystal : ${OverviewParser.deuterium.info}/$deuterium")

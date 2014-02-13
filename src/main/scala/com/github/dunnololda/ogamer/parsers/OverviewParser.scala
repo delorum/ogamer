@@ -1,10 +1,11 @@
-package com.github.dunnololda.ogamer
+package com.github.dunnololda.ogamer.parsers
 
 import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.{InputSource, Attributes}
 import org.ccil.cowan.tagsoup.Parser
 import java.io.StringReader
 import com.github.dunnololda.cli.MySimpleLogger
+import com.github.dunnololda.ogamer._
 
 class IntObtainer extends InfoObtainer[Int] {
   protected var _info:Int = 0
@@ -14,7 +15,7 @@ class IntObtainer extends InfoObtainer[Int] {
     _info = str2intOrDefault(info_obtainer.toString().trim(), 0)
   }
 
-  def clearInfo() {
+  protected def clearInfo() {
     _info = 0
   }
 

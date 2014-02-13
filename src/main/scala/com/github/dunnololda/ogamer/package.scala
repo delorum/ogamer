@@ -74,7 +74,7 @@ package object ogamer {
     }
   }
 
-  def deletion(op1:Int, op2:Int):Int = {
+  def safeDelete(op1:Int, op2:Int):Int = {
     if(op2 != 0) op1/op2 else Int.MaxValue
   }
 

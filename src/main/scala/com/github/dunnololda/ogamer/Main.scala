@@ -6,6 +6,7 @@ import com.github.dunnololda.cli.Imports._
 import akka.actor.{Props, Actor, ActorSystem}
 import concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import com.github.dunnololda.ogamer.parsers._
 
 object Main extends Cli {
   programDescription = s"Ogame Controller v$appVersion"
@@ -17,11 +18,11 @@ object Main extends Cli {
     ("gp", "gmail-pass", "gmail password", true, true)
   )
 
-  val uni = stringProperty("uni")
-  val login = stringProperty("login")
-  val pass = stringProperty("pass")
+  val uni         = stringProperty("uni")
+  val login       = stringProperty("login")
+  val pass        = stringProperty("pass")
   val gmail_login = stringProperty("gmail-login")
-  val gmail_pass = stringProperty("gmail-pass")
+  val gmail_pass  = stringProperty("gmail-pass")
 
   private val system = ActorSystem("ogame")
   system.actorOf(Props(new Master(login, pass, gmail_login, gmail_pass)(uni)), name = "master")
@@ -43,12 +44,12 @@ case object Station
 case object Research
 case object Shipyard
 case object Defense
-case object Fleet
+case object Fleet1
 
 class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(implicit uni:String) extends Actor {
   private val log = MySimpleLogger(this.getClass.getName)
 
-  private val all_pages = List(Overview, Resources, Station, Research, Shipyard, Defense, Fleet)
+  private val all_pages = List(Overview, Resources, Station, Research, Shipyard, Defense, Fleet1)
   def randomPage = {
     if(math.random < 0.3) Overview
     else all_pages((math.random*all_pages.length).toInt)
@@ -78,6 +79,12 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
   }
 
   private def commandsCheck() {
+    def unknownCommandAction(command:String) {
+      log.warn(s"unknown command: $command")
+      current_command_number += 1
+      commandsCheck()
+    }
+
     val commands = loadCommands
     if(commands.isEmpty) {
       log.info("no commands found")
@@ -87,7 +94,47 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
         val command = commands(current_command_number)
         log.info(s"current command: ${current_command_number+1} : $command")
         val command_split = command.split(" ")
-        if(command_split.length > 2) {
+        if(command_split.length > 4) {
+          command_split(0) match {
+            case "send" =>
+              val mission = command_split(1)
+              val fleet = command_split(2).split(",").toList.flatMap(x => {
+                val y = x.split(":")
+                if(y.length == 2) Some((y(0), str2intOrDefault(y(1), 0)))
+                else None
+              })
+              val resources_split = command_split(3).split(":")
+              if(resources_split.length == 3) {
+                val resources =  (str2intOrDefault(resources_split(0), 0), str2intOrDefault(resources_split(1), 0), str2intOrDefault(resources_split(2), 0))
+                val planet_split = command_split(4).split(":")
+                if(planet_split.length == 3) {
+                  val planet = (str2intOrDefault(planet_split(0), 0), str2intOrDefault(planet_split(1), 0), str2intOrDefault(planet_split(2), 0))
+                  val result = Fleet1Parser.sendFleet(mission, fleet, resources, (2,104,10), planet)
+                  if(result) {
+                    if(command_split.length > 5 && "mail" == command_split(5)) {
+                      sendMailSimple(gmail_login, gmail_pass,
+                        "sent fleet",
+                        s"sent fleet:\n" +
+                        s"from planet: 2:104:10\n" +
+                        s"fleet: ${fleet.map(x => s"${x._1}:${x._2}").mkString(", ")}\n" +
+                        s"mission: $mission\n" +
+                        s"resources: m:${resources._1} c:${resources._2} d:${resources._3}\n" +
+                        s"target planet: ${planet._1}:${planet._2}:${planet._3}"
+                      )
+                    }
+                    current_command_number += 1
+                  }
+                } else {
+                  log.error(s"wrong planet coords format: ${command_split(4)}")
+                }
+              } else {
+                log.error(s"wrong resources format: ${command_split(3)}")
+              }
+              scheduleNextCheck()
+            case x =>
+              unknownCommandAction(command)
+          }
+        } else if(command_split.length > 2) {
           command_split(0) match {
             case "build-ship" =>
               val ship = command_split(1)
@@ -116,9 +163,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
               }
               scheduleNextCheck()
             case x =>
-              log.warn(s"unknown command: $command")
-              current_command_number += 1
-              commandsCheck()
+              unknownCommandAction(command)
           }
         } else if(command_split.length > 1) {
           command_split(0) match {
@@ -219,9 +264,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
                 "going to shutdown")
               context.system.shutdown()
             case x =>
-              log.warn(s"unknown command: $command")
-              current_command_number += 1
-              commandsCheck()
+              unknownCommandAction(command)
           }
         } else if(command_split.length > 0) {
           command_split(0) match {
@@ -232,14 +275,10 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
                 "going to shutdown")
               context.system.shutdown()
             case x =>
-              log.warn(s"unknown command: $command")
-              current_command_number += 1
-              commandsCheck()
+              unknownCommandAction(command)
           }
         } else {
-          log.warn(s"unknown command: $command")
-          current_command_number += 1
-          commandsCheck()
+          unknownCommandAction(command)
         }
       } else {
         log.warn(s"no command on line ${current_command_number+1}")
@@ -390,10 +429,10 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
         log.error("it seems we need to relogin")
         self ! EnterSite
       }
-    case Fleet =>
+    case Fleet1 =>
       conn.executeGet(s"http://$uni/game/index.php?page=fleet1")
-      FleetParser.parse(conn.currentHtml)
-      if(FleetParser.login_indicator) {
+      Fleet1Parser.parse(conn.currentHtml)
+      if(Fleet1Parser.login_indicator) {
         context.system.scheduler.scheduleOnce(delay = 5.seconds) {
           self ! randomPage
         }

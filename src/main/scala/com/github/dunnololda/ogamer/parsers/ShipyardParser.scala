@@ -1,4 +1,4 @@
-package com.github.dunnololda.ogamer
+package com.github.dunnololda.ogamer.parsers
 
 import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.{InputSource, Attributes}
@@ -8,6 +8,8 @@ import com.github.dunnololda.cli.MySimpleLogger
 import com.github.dunnololda.conn.Conn
 import org.json.JSONObject
 import scala.collection.mutable
+import com.github.dunnololda.ogamer._
+import scala.Some
 
 object ShipyardParser extends DefaultHandler {
   private val log = MySimpleLogger(this.getClass.getName)
@@ -59,6 +61,12 @@ object ShipyardParser extends DefaultHandler {
     "sun-satellite"     -> ShipData("sun-satellite",     212, ShipCost(0,     2000, 500),  "unknown")
   )
 
+  private def shipsInit() {
+    ships.foreach {
+      case (ship, ship_data) => ships(ship) = ship_data.copy(ship_availability = "unknown")
+    }
+  }
+
   var login_indicator = false
 
   override def startDocument() {
@@ -66,6 +74,7 @@ object ShipyardParser extends DefaultHandler {
     military_ships_obtain_started = false
     civilian_ships_obtain_started = false
     login_indicator = false
+    shipsInit()
   }
 
   override def startElement(uri:String, local_name:String, raw_name:String, amap:Attributes) {
@@ -147,10 +156,10 @@ object ShipyardParser extends DefaultHandler {
               } else {
                 val available_amount = math.min(
                   math.min(
-                    deletion(OverviewParser.metal.info,   metal),
-                    deletion(OverviewParser.crystal.info, crystal)
+                    safeDelete(OverviewParser.metal.info,   metal),
+                    safeDelete(OverviewParser.crystal.info, crystal)
                   ),
-                  deletion(OverviewParser.deuterium.info, deuterium)
+                  safeDelete(OverviewParser.deuterium.info, deuterium)
                 )
                 if(available_amount == 0) {
                   log.warn(s"unable to build any of $ship. Unsufficient amount of resources: ${OverviewParser.metal.info}/$metal : ${OverviewParser.crystal.info}/$crystal : ${OverviewParser.deuterium.info}/$deuterium")
