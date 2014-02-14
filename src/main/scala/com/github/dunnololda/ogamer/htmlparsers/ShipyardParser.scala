@@ -1,4 +1,4 @@
-package com.github.dunnololda.ogamer.parsers
+package com.github.dunnololda.ogamer.htmlparsers
 
 import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.{InputSource, Attributes}
@@ -36,7 +36,7 @@ object ShipyardParser extends DefaultHandler {
 
     "civil-button4" -> "processor",
     "civil-button5" -> "probe",
-    "civil-button6" -> "sun-satellite"
+    "civil-button6" -> "satellite"
   )
 
   case class ShipCost(metal:Int, crystal:Int, deuterium:Int)
@@ -58,7 +58,7 @@ object ShipyardParser extends DefaultHandler {
 
     "processor"         -> ShipData("processor",         209, ShipCost(10000, 6000, 2000), "unknown"),
     "probe"             -> ShipData("probe",             210, ShipCost(0,     1000, 0),    "unknown"),
-    "sun-satellite"     -> ShipData("sun-satellite",     212, ShipCost(0,     2000, 500),  "unknown")
+    "satellite"         -> ShipData("satellite",         212, ShipCost(0,     2000, 500),  "unknown")
   )
 
   private def shipsInit() {
@@ -140,6 +140,8 @@ object ShipyardParser extends DefaultHandler {
     } else {
       conn.executeGet(s"http://$uni/game/index.php?page=shipyard")
       parse(conn.currentHtml)
+      Thread.sleep((math.random*10).toInt)
+
       if(token == "") {
         log.warn("failed to obtain token")
         false
@@ -173,9 +175,12 @@ object ShipyardParser extends DefaultHandler {
                   conn.addHeader("X-Requested-With", "XMLHttpRequest")
                   val form_ship_type = new JSONObject()
                   form_ship_type.put("type", ship_type)
+
                   conn.addPostData(form_ship_type)
                   conn.executePost(s"http://$uni/game/index.php?page=shipyard&ajax=1")
                   conn.removeCustomHeader("X-Requested-With")
+                  Thread.sleep((math.random*10).toInt)
+
                   val form_ship_data = new JSONObject()
                   form_ship_data.put("modus", 1)
                   form_ship_data.put("type", ship_type)

@@ -1,4 +1,4 @@
-package com.github.dunnololda.ogamer.parsers
+package com.github.dunnololda.ogamer.htmlparsers
 
 import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.{InputSource, Attributes}
@@ -55,8 +55,7 @@ object Fleet1Parser extends DefaultHandler {
     "colonizer"         -> ShipInfo("colonizer",         208, 7500,  0, available = false),
 
     "processor"         -> ShipInfo("processor",         209, 20000, 0, available = false),
-    "probe"             -> ShipInfo("probe",             210, 5,     0, available = false),
-    "sun-satellite"     -> ShipInfo("sun-satellite",     212, 0,     0, available = false)
+    "probe"             -> ShipInfo("probe",             210, 5,     0, available = false)
   )
 
   private val mission_types = Map(
@@ -168,6 +167,7 @@ object Fleet1Parser extends DefaultHandler {
 
     conn.executeGet(s"http://$uni/game/index.php?page=fleet1")
     parse(conn.currentHtml)
+    Thread.sleep((math.random*10).toInt)
 
     val form_fleet2 = new JSONObject()
     form_fleet2.put("galaxy",   from_planet._1)
@@ -181,6 +181,7 @@ object Fleet1Parser extends DefaultHandler {
     if(fleet2_addition.exists(x => x)) {
       conn.addPostData(form_fleet2)
       conn.executePost(s"http://$uni/game/index.php?page=fleet2")
+      Thread.sleep((math.random*10).toInt)
 
       val form_fleet3 = new JSONObject()
       form_fleet3.put("type",    1)
@@ -198,6 +199,8 @@ object Fleet1Parser extends DefaultHandler {
         conn.addPostData(form_fleet3)
         conn.executePost(s"http://$uni/game/index.php?page=fleet3")
         Fleet3Parser.parse(conn.currentHtml)
+        Thread.sleep((math.random*10).toInt)
+
         if(Fleet3Parser.token == "") {
           log.warn("failed to obtain token")
           false

@@ -1,4 +1,4 @@
-package com.github.dunnololda.ogamer.parsers
+package com.github.dunnololda.ogamer.htmlparsers
 
 import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.{InputSource, Attributes}
@@ -109,6 +109,8 @@ object DefenseParser extends DefaultHandler {
     } else {
       conn.executeGet(s"http://$uni/game/index.php?page=defense")
       parse(conn.currentHtml)
+      Thread.sleep((math.random*10).toInt)
+
       if(token == "") {
         log.warn("failed to obtain token")
         false
@@ -142,9 +144,12 @@ object DefenseParser extends DefaultHandler {
                   conn.addHeader("X-Requested-With", "XMLHttpRequest")
                   val form_defense_type = new JSONObject()
                   form_defense_type.put("type", defense_type)
+
                   conn.addPostData(form_defense_type)
                   conn.executePost(s"http://$uni/game/index.php?page=defense&ajax=1")
                   conn.removeCustomHeader("X-Requested-With")
+                  Thread.sleep((math.random*10).toInt)
+
                   val form_ship_data = new JSONObject()
                   form_ship_data.put("modus", 1)
                   form_ship_data.put("type", defense_type)

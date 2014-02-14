@@ -1,4 +1,4 @@
-package com.github.dunnololda.ogamer.parsers
+package com.github.dunnololda.ogamer.htmlparsers
 
 import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.{InputSource, Attributes}
@@ -97,8 +97,11 @@ object StationParser extends DefaultHandler {
 
   def buildStation(station:String)(implicit conn:Conn, uni:String):Boolean = {
     log.info(s"trying to build station $station")
+
     conn.executeGet(s"http://$uni/game/index.php?page=station")
     parse(conn.currentHtml)
+    Thread.sleep((math.random*10).toInt)
+
     stations.get(station) match {
       case Some((link, station_info)) =>
         if(link.isEmpty) {

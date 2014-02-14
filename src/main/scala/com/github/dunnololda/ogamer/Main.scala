@@ -6,7 +6,7 @@ import com.github.dunnololda.cli.Imports._
 import akka.actor.{Props, Actor, ActorSystem}
 import concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
-import com.github.dunnololda.ogamer.parsers._
+import com.github.dunnololda.ogamer.htmlparsers._
 
 object Main extends Cli {
   programDescription = s"Ogame Controller v$appVersion"
@@ -38,20 +38,20 @@ object Main extends Cli {
 case object EnterSite
 case object PerformLogin
 
-case object Overview
-case object Resources
-case object Station
-case object Research
-case object Shipyard
-case object Defense
-case object Fleet1
+case object OverviewPage
+case object ResourcesPage
+case object StationPage
+case object ResearchPage
+case object ShipyardPage
+case object DefensePage
+case object Fleet1Page
 
 class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(implicit uni:String) extends Actor {
   private val log = MySimpleLogger(this.getClass.getName)
 
-  private val all_pages = List(Overview, Resources, Station, Research, Shipyard, Defense, Fleet1)
+  private val all_pages = List(OverviewPage, ResourcesPage, StationPage, Research, ShipyardPage, DefensePage, Fleet1Page)
   def randomPage = {
-    if(math.random < 0.3) Overview
+    if(math.random < 0.3) OverviewPage
     else all_pages((math.random*all_pages.length).toInt)
   }
 
@@ -79,13 +79,8 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
   }
 
   private def commandsCheck() {
-    def unknownCommandAction(command:String) {
-      log.warn(s"unknown command: $command")
-      current_command_number += 1
-      commandsCheck()
-    }
+    val commands = CommandsParser.loadCommands
 
-    val commands = loadCommands
     if(commands.isEmpty) {
       log.info("no commands found")
       scheduleNextCheck()
@@ -93,210 +88,132 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
       if(current_command_number >= 0 && current_command_number < commands.length) {
         val command = commands(current_command_number)
         log.info(s"current command: ${current_command_number+1} : $command")
-        val command_split = command.split(" ")
-        if(command_split.length > 4) {
-          command_split(0) match {
-            case "send" =>
-              val mission = command_split(1)
-              val fleet = command_split(2).split(",").toList.flatMap(x => {
-                val y = x.split(":")
-                if(y.length == 2) Some((y(0), str2intOrDefault(y(1), 0)))
-                else None
-              })
-              val resources_split = command_split(3).split(":")
-              if(resources_split.length == 3) {
-                val resources =  (str2intOrDefault(resources_split(0), 0), str2intOrDefault(resources_split(1), 0), str2intOrDefault(resources_split(2), 0))
-                val planet_split = command_split(4).split(":")
-                if(planet_split.length == 3) {
-                  val planet = (str2intOrDefault(planet_split(0), 0), str2intOrDefault(planet_split(1), 0), str2intOrDefault(planet_split(2), 0))
-                  val result = Fleet1Parser.sendFleet(mission, fleet, resources, (2,104,10), planet)
-                  if(result) {
-                    if(command_split.length > 5 && "mail" == command_split(5)) {
-                      sendMailSimple(gmail_login, gmail_pass,
-                        "sent fleet",
-                        s"sent fleet:\n" +
-                        s"from planet: 2:104:10\n" +
-                        s"fleet: ${fleet.map(x => s"${x._1}:${x._2}").mkString(", ")}\n" +
-                        s"mission: $mission\n" +
-                        s"resources: m:${resources._1} c:${resources._2} d:${resources._3}\n" +
-                        s"target planet: ${planet._1}:${planet._2}:${planet._3}"
-                      )
-                    }
-                    current_command_number += 1
-                  }
-                } else {
-                  log.error(s"wrong planet coords format: ${command_split(4)}")
-                }
-              } else {
-                log.error(s"wrong resources format: ${command_split(3)}")
+        command match {
+          case SendFleet(mission, fleet, resources, target_planet, mail) =>
+            val result = Fleet1Parser.sendFleet(mission, fleet, resources, (2,104,10), target_planet)
+            if(result) {
+              if(mail) {
+                sendMailSimple(gmail_login, gmail_pass,
+                  "sent fleet",
+                  s"sent fleet:\n" +
+                    s"from planet: 2:104:10\n" +
+                    s"fleet: ${fleet.map(x => s"${x._1}:${x._2}").mkString(", ")}\n" +
+                    s"mission: $mission\n" +
+                    s"resources: m:${resources._1} c:${resources._2} d:${resources._3}\n" +
+                    s"target planet: ${target_planet._1}:${target_planet._2}:${target_planet._3}"
+                )
               }
-              scheduleNextCheck()
-            case x =>
-              unknownCommandAction(command)
-          }
-        } else if(command_split.length > 2) {
-          command_split(0) match {
-            case "build-ship" =>
-              val ship = command_split(1)
-              val amount = str2intOrDefault(command_split(2), 0)
-              val result = ShipyardParser.buildShip(ship, amount)
-              if(result) {
-                if(command_split.length > 3 && "mail" == command_split(3)) {
+              current_command_number += 1
+            }
+            scheduleNextCheck()
+          case BuildShip(ship, amount, mail) =>
+            val result = ShipyardParser.buildShip(ship, amount)
+            if(result) {
+              if(mail) {
+                sendMailSimple(gmail_login, gmail_pass,
+                  "started to build ship",
+                  s"started to build ship $ship")
+              }
+              current_command_number += 1
+            }
+            scheduleNextCheck()
+          case BuildDefense(defense, amount, mail) =>
+            val result = DefenseParser.buildDefense(defense, amount)
+            if(result) {
+              if(mail) {
+                sendMailSimple(gmail_login, gmail_pass,
+                  "started to build defense",
+                  s"started to build defense $defense")
+              }
+              current_command_number += 1
+            }
+            scheduleNextCheck()
+          case Limits(metal_limit, crystal_limit, deuterium_limit, mail) =>
+            val need_to_reach_limit = metal_limit != 0 || crystal_limit != 0 || deuterium_limit != 0
+            if(need_to_reach_limit) {
+              val metal_limit_reached = metal_limit == 0 || OverviewParser.metal.info >= metal_limit
+              val crystal_limit_reached = crystal_limit == 0 || OverviewParser.crystal.info >= crystal_limit
+              val deuterium_limit_reached = deuterium_limit == 0 || OverviewParser.deuterium.info >= deuterium_limit
+              if(metal_limit_reached && crystal_limit_reached && deuterium_limit_reached) {
+                log.info(s"limits reached: ${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
+                if(mail) {
                   sendMailSimple(gmail_login, gmail_pass,
-                    "started to build ship",
-                    s"started to build ship $ship")
+                    "limits reached",
+                    s"${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
                 }
-                current_command_number += 1
-              }
-              scheduleNextCheck()
-            case "build-defense" =>
-              val defense = command_split(1)
-              val amount = str2intOrDefault(command_split(2), 0)
-              val result = DefenseParser.buildDefense(defense, amount)
-              if(result) {
-                if(command_split.length > 3 && "mail" == command_split(3)) {
-                  sendMailSimple(gmail_login, gmail_pass,
-                    "started to build defense",
-                    s"started to build defense $defense")
-                }
-                current_command_number += 1
-              }
-              scheduleNextCheck()
-            case x =>
-              unknownCommandAction(command)
-          }
-        } else if(command_split.length > 1) {
-          command_split(0) match {
-            case "limits" =>
-              val limits = command_split(1).split(":")
-              if(limits.length == 3) {
-                val metal_limit = str2intOrDefault(limits(0), 0)
-                val crystal_limit = str2intOrDefault(limits(1), 0)
-                val deuterium_limit = str2intOrDefault(limits(2), 0)
-                val need_to_reach_limit = metal_limit != 0 || crystal_limit != 0 || deuterium_limit != 0
-                if(need_to_reach_limit) {
-                  val metal_limit_reached = metal_limit == 0 || OverviewParser.metal.info >= metal_limit
-                  val crystal_limit_reached = crystal_limit == 0 || OverviewParser.crystal.info >= crystal_limit
-                  val deuterium_limit_reached = deuterium_limit == 0 || OverviewParser.deuterium.info >= deuterium_limit
-                  if(metal_limit_reached && crystal_limit_reached && deuterium_limit_reached) {
-                    log.info(s"limits reached: ${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
-                    if(command_split.length > 2 && "mail" == command_split(2)) {
-                      sendMailSimple(gmail_login, gmail_pass,
-                        "limits reached",
-                        s"${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
-                    }
-                    current_command_number += 1
-                    commandsCheck()
-                  } else {
-                    log.info(s"limits not reached: ${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
-                    scheduleNextCheck()
-                  }
-                } else {
-                  log.error(s"no limits set: $command")
-                  current_command_number += 1
-                  commandsCheck()
-                }
-              } else {
-                log.error(s"no limits set: $command")
                 current_command_number += 1
                 commandsCheck()
-              }
-            case "max-timeout-min" =>
-              val max_timeout_min = str2intOrDefault(command_split(1), 0)
-              if(max_timeout_min > 0) {
-                log.info(s"set max timeout between checks to $max_timeout_min min")
-                max_timeout_between_check_seconds = max_timeout_min*60
               } else {
-                log.error(s"wrong max-timeout-min param: $max_timeout_min, must be integer above zero")
+                log.info(s"limits not reached: ${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
+                scheduleNextCheck()
+              }
+            } else {
+              log.error(s"no limits set: $command")
+              current_command_number += 1
+              commandsCheck()
+            }
+          case MaxTimeoutMin(min) =>
+            if(min > 0) {
+                log.info(s"set max timeout between checks to $min min")
+                max_timeout_between_check_seconds = min*60
+              } else {
+                log.error(s"wrong max-timeout-min param: $min, must be integer above zero")
               }
               current_command_number += 1
               commandsCheck()
-            case "goto" =>
-              val goto = str2intOrDefault(command_split(1), -1)
-              if(goto >= 1 && goto != current_command_number) {
-                log.info(s"going to $goto command")
-                current_command_number = goto-1
-              } else {
-                log.error(s"wrong goto command: $goto")
-                current_command_number += 1
+          case Goto(goto) =>
+            if(goto >= 1 && goto != current_command_number) {
+              log.info(s"going to $goto command")
+              current_command_number = goto-1
+            } else {
+              log.error(s"wrong goto command: $goto")
+              current_command_number += 1
+            }
+            commandsCheck()
+          case BuildMine(mine, mail) =>
+            val result = ResourcesParser.buildMine(mine)
+            if(result) {
+              if(mail) {
+                sendMailSimple(gmail_login, gmail_pass,
+                  "started to build mine",
+                  s"started to build mine $mine")
               }
-              commandsCheck()
-            case "build-mine" =>
-              val mine = command_split(1)
-              val result = ResourcesParser.buildMine(mine)
-              if(result) {
-                if(command_split.length > 2 && "mail" == command_split(2)) {
-                  sendMailSimple(gmail_login, gmail_pass,
-                    "started to build mine",
-                    s"started to build mine $mine")
-                }
-                current_command_number += 1
+              current_command_number += 1
+            }
+            scheduleNextCheck()
+          case BuildStation(station, mail) =>
+            val result = StationParser.buildStation(station)
+            if(result) {
+              if(mail) {
+                sendMailSimple(gmail_login, gmail_pass,
+                  "started to build station",
+                  s"started to build station $station")
               }
-              scheduleNextCheck()
-            case "build-station" =>
-              val station = command_split(1)
-              val result = StationParser.buildStation(station)
-              if(result) {
-                if(command_split.length > 2 && "mail" == command_split(2)) {
-                  sendMailSimple(gmail_login, gmail_pass,
-                    "started to build station",
-                    s"started to build station $station")
-                }
-                current_command_number += 1
+              current_command_number += 1
+            }
+            scheduleNextCheck()
+          case Research(tech, mail) =>
+            val result = ResearchParser.research(tech)
+            if(result) {
+              if(mail) {
+                sendMailSimple(gmail_login, gmail_pass,
+                  "started to research tech",
+                  s"started to research tech $tech")
               }
-              scheduleNextCheck()
-            case "research" =>
-              val tech = command_split(1)
-              val result = ResearchParser.research(tech)
-              if(result) {
-                if(command_split.length > 2 && "mail" == command_split(2)) {
-                  sendMailSimple(gmail_login, gmail_pass,
-                    "started to research tech",
-                    s"started to research tech $tech")
-                }
-                current_command_number += 1
-              }
-              scheduleNextCheck()
-            case "quit" =>
-              log.info("going to shutdown")
-              sendMailSimple(gmail_login, gmail_pass,
-                "going to shutdown",
-                "going to shutdown")
-              context.system.shutdown()
-            case x =>
-              unknownCommandAction(command)
-          }
-        } else if(command_split.length > 0) {
-          command_split(0) match {
-            case "quit" =>
-              log.info("going to shutdown")
-              sendMailSimple(gmail_login, gmail_pass,
-                "going to shutdown",
-                "going to shutdown")
-              context.system.shutdown()
-            case x =>
-              unknownCommandAction(command)
-          }
-        } else {
-          unknownCommandAction(command)
+              current_command_number += 1
+            }
+            scheduleNextCheck()
+          case Quit =>
+            log.info("going to shutdown")
+            sendMailSimple(gmail_login, gmail_pass,
+              "going to shutdown",
+              "going to shutdown")
+            context.system.shutdown()
+          case UnknownCommand(unknown_command) =>
+            log.warn(s"unknown command: $unknown_command")
+            current_command_number += 1
+            commandsCheck()
         }
-      } else {
-        log.warn(s"no command on line ${current_command_number+1}")
-        scheduleNextCheck()
-      }
-    }
-  }
-
-  private def loadCommands:Array[String] = {
-    val commands_file = new java.io.File("commands")
-    if(!commands_file.exists()) Array()
-    else {
-      try {
-        io.Source.fromFile("commands").getLines().toArray
-      } catch {
-        case t:Throwable =>
-          log.error(s"failed to load existing commands file: $t")
-          Array()
       }
     }
   }
@@ -355,7 +272,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
         newMessagesCheck()
         commandsCheck()
       }
-    case Overview =>
+    case OverviewPage =>
       if(!is_logged_in) {
         log.info("not logged in, entering...")
         self ! EnterSite
@@ -374,7 +291,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
           commandsCheck()
         }
       }
-    case Resources =>
+    case ResourcesPage =>
       conn.executeGet(s"http://$uni/game/index.php?page=resources")
       ResourcesParser.parse(conn.currentHtml)
       if(ResourcesParser.login_indicator) {
@@ -385,7 +302,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
         log.error("it seems we need to relogin")
         self ! EnterSite
       }
-    case Station =>
+    case StationPage =>
       conn.executeGet(s"http://$uni/game/index.php?page=station")
       StationParser.parse(conn.currentHtml)
       if(StationParser.login_indicator) {
@@ -396,7 +313,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
         log.error("it seems we need to relogin")
         self ! EnterSite
       }
-    case Research =>
+    case ResearchPage =>
       conn.executeGet(s"http://$uni/game/index.php?page=research")
       ResearchParser.parse(conn.currentHtml)
       if(ResearchParser.login_indicator) {
@@ -407,7 +324,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
         log.error("it seems we need to relogin")
         self ! EnterSite
       }
-    case Shipyard =>
+    case ShipyardPage =>
       conn.executeGet(s"http://$uni/game/index.php?page=shipyard")
       ShipyardParser.parse(conn.currentHtml)
       if(ShipyardParser.login_indicator) {
@@ -418,7 +335,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
         log.error("it seems we need to relogin")
         self ! EnterSite
       }
-    case Defense =>
+    case DefensePage =>
       conn.executeGet(s"http://$uni/game/index.php?page=defense")
       DefenseParser.parse(conn.currentHtml)
       if(DefenseParser.login_indicator) {
@@ -429,7 +346,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
         log.error("it seems we need to relogin")
         self ! EnterSite
       }
-    case Fleet1 =>
+    case Fleet1Page =>
       conn.executeGet(s"http://$uni/game/index.php?page=fleet1")
       Fleet1Parser.parse(conn.currentHtml)
       if(Fleet1Parser.login_indicator) {

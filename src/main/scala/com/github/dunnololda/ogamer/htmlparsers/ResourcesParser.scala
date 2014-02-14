@@ -1,4 +1,4 @@
-package com.github.dunnololda.ogamer.parsers
+package com.github.dunnololda.ogamer.htmlparsers
 
 import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.{InputSource, Attributes}
@@ -68,7 +68,6 @@ object ResourcesParser extends DefaultHandler {
   val deuterium_build_link = new BuildLinkObtainer
   val electro_build_link = new BuildLinkObtainer
   val thermonuclear_build_link = new BuildLinkObtainer
-  val satellite_build_link = new BuildLinkObtainer
 
   val metal_storage_build_link = new BuildLinkObtainer
   val crystal_storage_build_link = new BuildLinkObtainer
@@ -84,7 +83,6 @@ object ResourcesParser extends DefaultHandler {
     deuterium_build_link,
     electro_build_link,
     thermonuclear_build_link,
-    satellite_build_link,
 
     metal_storage_build_link,
     crystal_storage_build_link,
@@ -100,7 +98,6 @@ object ResourcesParser extends DefaultHandler {
     "supply3" -> deuterium_build_link,
     "supply4" -> electro_build_link,
     "supply12" -> thermonuclear_build_link,
-    "supply212" -> satellite_build_link,
 
     "supply22" -> metal_storage_build_link,
     "supply23" -> crystal_storage_build_link,
@@ -164,7 +161,6 @@ object ResourcesParser extends DefaultHandler {
     "deuterium" -> (deuterium_build_link, "crystal mine"),
     "electro" -> (electro_build_link, "powerplant"),
     "thermonuclear" -> (thermonuclear_build_link, "thermonuclear powerplant"),
-    "satellite" -> (satellite_build_link, "sun satellite"),
 
     "metal-storage" -> (metal_storage_build_link, "metal storage"),
     "crystal-storage" -> (crystal_storage_build_link, "metal storage"),
@@ -177,8 +173,11 @@ object ResourcesParser extends DefaultHandler {
 
   def buildMine(mine:String)(implicit conn:Conn, uni:String):Boolean = {
     log.info(s"trying to build mine $mine")
+
     conn.executeGet(s"http://$uni/game/index.php?page=resources")
     parse(conn.currentHtml)
+    Thread.sleep((math.random*10).toInt)
+
     buildings.get(mine) match {
       case Some((link, building_info)) =>
         if(link.isEmpty) {

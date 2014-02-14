@@ -1,4 +1,4 @@
-package com.github.dunnololda.ogamer.parsers
+package com.github.dunnololda.ogamer.htmlparsers
 
 import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.{InputSource, Attributes}
@@ -145,8 +145,11 @@ object ResearchParser extends DefaultHandler {
 
   def research(tech:String)(implicit conn:Conn, uni:String):Boolean = {
     log.info(s"trying to research $tech")
+
     conn.executeGet(s"http://$uni/game/index.php?page=research")
     parse(conn.currentHtml)
+    Thread.sleep((math.random*10).toInt)
+
     techs.get(tech) match {
       case Some((link, tech_info)) =>
         if(link.isEmpty) {
