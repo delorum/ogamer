@@ -213,6 +213,10 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
             log.warn(s"unknown command: $unknown_command")
             current_command_number += 1
             commandsCheck()
+          case x =>
+            log.warn(s"unknown command: $x")
+            current_command_number += 1
+            commandsCheck()
         }
       }
     }
