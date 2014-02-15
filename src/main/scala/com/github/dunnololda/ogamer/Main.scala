@@ -49,7 +49,7 @@ case object Fleet1Page
 class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(implicit uni:String) extends Actor {
   private val log = MySimpleLogger(this.getClass.getName)
 
-  private val all_pages = List(OverviewPage, ResourcesPage, StationPage, Research, ShipyardPage, DefensePage, Fleet1Page)
+  private val all_pages = List(OverviewPage, ResourcesPage, StationPage, ResearchPage, ShipyardPage, DefensePage, Fleet1Page)
   def randomPage = {
     if(math.random < 0.3) OverviewPage
     else all_pages((math.random*all_pages.length).toInt)
@@ -299,7 +299,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
       conn.executeGet(s"http://$uni/game/index.php?page=resources")
       ResourcesParser.parse(conn.currentHtml)
       if(ResourcesParser.login_indicator) {
-        context.system.scheduler.scheduleOnce(delay = 5.seconds) {
+        context.system.scheduler.scheduleOnce(delay = (math.random*5+1).toLong.seconds) {
           self ! randomPage
         }
       } else {
@@ -310,7 +310,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
       conn.executeGet(s"http://$uni/game/index.php?page=station")
       StationParser.parse(conn.currentHtml)
       if(StationParser.login_indicator) {
-        context.system.scheduler.scheduleOnce(delay = 5.seconds) {
+        context.system.scheduler.scheduleOnce(delay = (math.random*5+1).toLong.seconds) {
           self ! randomPage
         }
       } else {
@@ -321,7 +321,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
       conn.executeGet(s"http://$uni/game/index.php?page=research")
       ResearchParser.parse(conn.currentHtml)
       if(ResearchParser.login_indicator) {
-        context.system.scheduler.scheduleOnce(delay = 5.seconds) {
+        context.system.scheduler.scheduleOnce(delay = (math.random*5+1).toLong.seconds) {
           self ! randomPage
         }
       } else {
@@ -332,7 +332,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
       conn.executeGet(s"http://$uni/game/index.php?page=shipyard")
       ShipyardParser.parse(conn.currentHtml)
       if(ShipyardParser.login_indicator) {
-        context.system.scheduler.scheduleOnce(delay = 5.seconds) {
+        context.system.scheduler.scheduleOnce(delay = (math.random*5+1).toLong.seconds) {
           self ! randomPage
         }
       } else {
@@ -343,7 +343,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
       conn.executeGet(s"http://$uni/game/index.php?page=defense")
       DefenseParser.parse(conn.currentHtml)
       if(DefenseParser.login_indicator) {
-        context.system.scheduler.scheduleOnce(delay = 5.seconds) {
+        context.system.scheduler.scheduleOnce(delay = (math.random*5+1).toLong.seconds) {
           self ! randomPage
         }
       } else {
@@ -354,12 +354,17 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
       conn.executeGet(s"http://$uni/game/index.php?page=fleet1")
       Fleet1Parser.parse(conn.currentHtml)
       if(Fleet1Parser.login_indicator) {
-        context.system.scheduler.scheduleOnce(delay = 5.seconds) {
+        context.system.scheduler.scheduleOnce(delay = (math.random*5+1).toLong.seconds) {
           self ! randomPage
         }
       } else {
         log.error("it seems we need to relogin")
         self ! EnterSite
+      }
+    case x =>
+      log.warn(s"unknown message: $x")
+      context.system.scheduler.scheduleOnce(delay = (math.random*5+1).toLong.seconds) {
+        self ! randomPage
       }
   }
 }
