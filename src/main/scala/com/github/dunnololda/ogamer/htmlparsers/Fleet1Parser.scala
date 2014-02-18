@@ -39,7 +39,7 @@ object Fleet1Parser extends DefaultHandler {
   private var textlabel_skipped = false
 
   case class ShipInfo(ship_name:String, ship_type:Int, ship_capacity:Int, amount:Int, available:Boolean)
-  private val fleet_info = mutable.HashMap[String, ShipInfo](
+  val fleet_info = mutable.HashMap[String, ShipInfo](
     "light-interceptor" -> ShipInfo("light-interceptor", 204, 50,   0, available = false),
     "heavy-interceptor" -> ShipInfo("heavy-interceptor", 205, 100,  0, available = false),
     "cruiser"           -> ShipInfo("cruiser",           206, 800,  0, available = false),
@@ -167,7 +167,7 @@ object Fleet1Parser extends DefaultHandler {
 
     conn.executeGet(s"http://$uni/game/index.php?page=fleet1")
     parse(conn.currentHtml)
-    Thread.sleep((math.random*10).toInt)
+    Thread.sleep((math.random*10).toInt*1000)
 
     val form_fleet2 = new JSONObject()
     form_fleet2.put("galaxy",   from_planet._1)
@@ -181,7 +181,7 @@ object Fleet1Parser extends DefaultHandler {
     if(fleet2_addition.exists(x => x)) {
       conn.addPostData(form_fleet2)
       conn.executePost(s"http://$uni/game/index.php?page=fleet2")
-      Thread.sleep((math.random*10).toInt)
+      Thread.sleep((math.random*10).toInt*1000)
 
       val form_fleet3 = new JSONObject()
       form_fleet3.put("type",    1)
@@ -199,7 +199,7 @@ object Fleet1Parser extends DefaultHandler {
         conn.addPostData(form_fleet3)
         conn.executePost(s"http://$uni/game/index.php?page=fleet3")
         Fleet3Parser.parse(conn.currentHtml)
-        Thread.sleep((math.random*10).toInt)
+        Thread.sleep((math.random*10).toInt*1000)
 
         if(Fleet3Parser.token == "") {
           log.warn("failed to obtain token")
@@ -277,5 +277,25 @@ object Fleet1Parser extends DefaultHandler {
       log.error("didn't add any ship, so nothing to send")
       false
     }
+  }
+
+  def checkLimits(fleet:List[(String, Int)])(implicit conn:Conn, uni:String):(Boolean, String) = {
+    conn.executeGet(s"http://$uni/game/index.php?page=fleet1")
+    parse(conn.currentHtml)
+    val info = fleet.map {
+      case (ship, amount) =>
+        fleet_info.get(ship) match {
+          case Some(ShipInfo(ship_name, ship_type, ship_capacity, overall_amount, available)) =>
+            if(available && overall_amount >= amount) {
+              (true, s"$overall_amount/$amount")
+            } else {
+              (false, s"$overall_amount/$amount")
+            }
+          case None =>
+            log.warn(s"unknown ship: $ship")
+            (false, s"unknown/$amount")
+        }
+    }
+    (info.forall(_._1), info.map(_._2).mkString(", "))
   }
 }

@@ -20,6 +20,12 @@ case class Goto(command:Int) extends Command
 case class BuildMine(mine:String, mail:Boolean) extends Command
 case class BuildStation(station:String, mail:Boolean) extends Command
 case class Research(tech:String, mail:Boolean) extends Command
+case class MailNewMessages(send_mail:Boolean) extends Command
+case object WaitFleetReturn extends Command
+case class FleetLimits(fleet:List[(String, Int)], else_goto:Int, mail:Boolean) extends Command
+case object Return extends Command
+case object EmptyString extends Command
+case object Comment extends Command
 case class UnknownCommand(command:String) extends Command
 
 object CommandsParser extends JavaTokenParsers {
@@ -125,17 +131,37 @@ object CommandsParser extends JavaTokenParsers {
 
   def researchParser:Parser[Research] = "research"~techParser~maybeMailParser ^^ {case "research"~tech~mail => Research(tech, mail)}
 
+  def fleetLimistParser:Parser[FleetLimits] = "fleet-limits"~fleetParser~maybeMailParser~"else-goto"~wholeNumber ^^ {
+    case "fleet-limits"~fleet~mail~"else-goto"~else_goto => FleetLimits(fleet, else_goto.toInt, mail)
+  }
+
+  def waitFleetReturnParser:Parser[WaitFleetReturn.type] = "wait-fleet-return" ^^ {case _ => WaitFleetReturn}
+
+  def mailNewMessagesParser:Parser[MailNewMessages] = "mail-new-messages"~("on" | "off") ^^ {case "mail-new-messages"~x => MailNewMessages("on" == x)}
+
+  def returnParser:Parser[Return.type] = "return" ^^ {case _ => Return}
+
+  def commentParser:Parser[Comment.type] = "#"~".*".r ^^ {case "#"~s => Comment}
+
+  def emptyStringParser:Parser[EmptyString.type] = " *".r ^^ {case s => EmptyString}
+
   def commandParser:Parser[Command] =
-    quitParser |
-    sendFleetParser |
-    buildShipParser |
-    buildDefenseParser |
-    limitsParser |
-    maxTimeoutMinParser |
-    gotoParser |
-    buildMineParser |
-    buildStationParser |
-    researchParser
+    quitParser            |
+    sendFleetParser       |
+    buildShipParser       |
+    buildDefenseParser    |
+    limitsParser          |
+    maxTimeoutMinParser   |
+    gotoParser            |
+    buildMineParser       |
+    buildStationParser    |
+    researchParser        |
+    fleetLimistParser     |
+    waitFleetReturnParser |
+    mailNewMessagesParser |
+    returnParser          |
+    commentParser         |
+    emptyStringParser
 
   def loadCommands:Array[Command] = {
     val commands_file = new java.io.File("commands")

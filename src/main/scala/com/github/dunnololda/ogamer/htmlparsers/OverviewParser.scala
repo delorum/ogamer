@@ -2,10 +2,11 @@ package com.github.dunnololda.ogamer.htmlparsers
 
 import org.xml.sax.helpers.DefaultHandler
 import org.xml.sax.{InputSource, Attributes}
-import org.ccil.cowan.tagsoup.Parser
+import org.ccil.cowan.tagsoup.{Parser => TagsoupParser}
 import java.io.StringReader
 import com.github.dunnololda.cli.MySimpleLogger
 import com.github.dunnololda.ogamer._
+import scala.util.parsing.combinator._
 
 class IntObtainer extends InfoObtainer[Int] {
   protected var _info:Int = 0
@@ -24,26 +25,37 @@ class IntObtainer extends InfoObtainer[Int] {
   }
 }
 
-object OverviewParser extends DefaultHandler {
+class IntObtainerWithout extends IntObtainer {
+  override def obtainer2info() {
+    _info = str2intOrDefault(info_obtainer.toString().trim(), 0, without_warning = true)
+  }
+}
+
+object OverviewParser extends DefaultHandler with JavaTokenParsers {
   private val log = MySimpleLogger(this.getClass.getName)
 
   val metal = new IntObtainer
   val crystal = new IntObtainer
   val deuterium = new IntObtainer
   val energy = new IntObtainer
+
   var under_attack = false
 
+  var friendly_flights = 0
+  var neutral_flights = 0
+  var hostile_flights = 0
+
   var previous_new_messages = 0
-  val new_messages = new IntObtainer {
-     override def obtainer2info() {
-      _info = str2intOrDefault(info_obtainer.toString().trim(), 0, without_warning = true)
-    }
-  }
+  val new_messages = new IntObtainerWithout
 
   val all_obtainers = List(metal, crystal, deuterium, energy, new_messages)
 
   override def startDocument() {
     previous_new_messages = new_messages.info
+    under_attack = false
+    friendly_flights = 0
+    neutral_flights = 0
+    hostile_flights = 0
     all_obtainers.foreach(_.init())
   }
 
@@ -98,10 +110,25 @@ object OverviewParser extends DefaultHandler {
     all_obtainers.foreach(_.obtainer2info())
   }
 
-  private val parser = new Parser
+  private def flightInfoParser:Parser[(Int,Int,Int)] = "\"hostile\""~":"~wholeNumber~","~"\"neutral\""~":"~wholeNumber~","~"\"friendly\""~":"~wholeNumber~".*".r ^^ {
+    case "\"hostile\""~":"~hostile~","~"\"neutral\""~":"~neutral~","~"\"friendly\""~":"~friendly~s => (hostile.toInt, neutral.toInt, friendly.toInt)
+  }
+
+  private val parser = new TagsoupParser
   parser.setContentHandler(this)
   def parse(html:String) {
     parser.parse(new InputSource(new StringReader(html)))
+    val flight_info = html.drop(html.indexOf("reloadEventbox({")).drop("reloadEventbox({".length).takeWhile(_ != '}')
+    parseAll(flightInfoParser, flight_info) match {
+      case Success((hostile,neutral,friendly), _) =>
+        hostile_flights  = hostile
+        neutral_flights  = neutral
+        friendly_flights = friendly
+      case Failure(msg, _) =>
+        log.error(s"failed to parse $flight_info: $msg")
+      case Error(msg, _) =>
+        log.error(s"failed to parse $flight_info: $msg")
+    }
   }
 
   def nonEmpty:Boolean = {
@@ -109,4 +136,7 @@ object OverviewParser extends DefaultHandler {
   }
 
   def isEmpty:Boolean = !nonEmpty
+
+  def noFlightActivity:Boolean = hostile_flights == 0 && neutral_flights == 0 && friendly_flights == 0
+  def noSelfFlightActivity:Boolean = friendly_flights == 0
 }

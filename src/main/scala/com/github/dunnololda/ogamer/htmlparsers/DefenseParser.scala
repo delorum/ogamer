@@ -109,7 +109,7 @@ object DefenseParser extends DefaultHandler {
     } else {
       conn.executeGet(s"http://$uni/game/index.php?page=defense")
       parse(conn.currentHtml)
-      Thread.sleep((math.random*10).toInt)
+      Thread.sleep((math.random*10).toInt*1000)
 
       if(token == "") {
         log.warn("failed to obtain token")
@@ -148,7 +148,7 @@ object DefenseParser extends DefaultHandler {
                   conn.addPostData(form_defense_type)
                   conn.executePost(s"http://$uni/game/index.php?page=defense&ajax=1")
                   conn.removeCustomHeader("X-Requested-With")
-                  Thread.sleep((math.random*10).toInt)
+                  Thread.sleep((math.random*10).toInt*1000)
 
                   val form_ship_data = new JSONObject()
                   form_ship_data.put("modus", 1)

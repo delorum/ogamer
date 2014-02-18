@@ -100,7 +100,7 @@ object StationParser extends DefaultHandler {
 
     conn.executeGet(s"http://$uni/game/index.php?page=station")
     parse(conn.currentHtml)
-    Thread.sleep((math.random*10).toInt)
+    Thread.sleep((math.random*10).toInt*1000)
 
     stations.get(station) match {
       case Some((link, station_info)) =>

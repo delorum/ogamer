@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>ogamer</groupId>
   <artifactId>ogamer</artifactId>
-  <version>7</version>
+  <version>8</version>
   <name>${project.artifactId}</name>
   <description>My wonderfull scala app</description>
   <inceptionYear>2010</inceptionYear>

@@ -7,6 +7,26 @@ import akka.actor.{Props, Actor, ActorSystem}
 import concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import com.github.dunnololda.ogamer.htmlparsers._
+import scala.collection.mutable
+
+class CommandNumber(var current:Int) {
+  val previous:mutable.Stack[Int] = mutable.Stack[Int](current)
+
+  def showCurrent = current+1
+  def showPrevious = previous.head+1
+  def nextNumber() {
+    previous.push(current)
+    current += 1
+  }
+  def goto(goto:Int) {
+    previous.push(current)
+    current = goto
+  }
+
+  def returnBack() {
+    current = previous.pop()
+  }
+}
 
 object Main extends Cli {
   programDescription = s"Ogame Controller v$appVersion"
@@ -56,7 +76,8 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
   }
 
   private var max_timeout_between_check_seconds = 5*60   // 5 minutes in seconds
-  private var current_command_number = 0
+  private val command_number = new CommandNumber(0)
+  private var send_mail_on_new_messages = true
 
   private implicit val conn = new Conn
   private var is_logged_in = false
@@ -80,14 +101,13 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
 
   private def commandsCheck() {
     val commands = CommandsParser.loadCommands
-
     if(commands.isEmpty) {
       log.info("no commands found")
       scheduleNextCheck()
     } else {
-      if(current_command_number >= 0 && current_command_number < commands.length) {
-        val command = commands(current_command_number)
-        log.info(s"current command: ${current_command_number+1} : $command")
+      if(command_number.current >= 0 && command_number.current < commands.length) {
+        val command = commands(command_number.current)
+        log.info(s"current command: ${command_number.showCurrent} : $command")
         command match {
           case SendFleet(mission, fleet, resources, target_planet, mail) =>
             val result = Fleet1Parser.sendFleet(mission, fleet, resources, (2,104,10), target_planet)
@@ -103,7 +123,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
                     s"target planet: ${target_planet._1}:${target_planet._2}:${target_planet._3}"
                 )
               }
-              current_command_number += 1
+              command_number.nextNumber()
             }
             scheduleNextCheck()
           case BuildShip(ship, amount, mail) =>
@@ -114,7 +134,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
                   "started to build ship",
                   s"started to build ship $ship")
               }
-              current_command_number += 1
+              command_number.nextNumber()
             }
             scheduleNextCheck()
           case BuildDefense(defense, amount, mail) =>
@@ -125,7 +145,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
                   "started to build defense",
                   s"started to build defense $defense")
               }
-              current_command_number += 1
+              command_number.nextNumber()
             }
             scheduleNextCheck()
           case Limits(metal_limit, crystal_limit, deuterium_limit, mail) =>
@@ -141,7 +161,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
                     "limits reached",
                     s"${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
                 }
-                current_command_number += 1
+                command_number.nextNumber()
                 commandsCheck()
               } else {
                 log.info(s"limits not reached: ${OverviewParser.metal.info}/$metal_limit : ${OverviewParser.crystal.info}/$crystal_limit : ${OverviewParser.deuterium.info}/$deuterium_limit")
@@ -149,7 +169,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
               }
             } else {
               log.error(s"no limits set: $command")
-              current_command_number += 1
+              command_number.nextNumber()
               commandsCheck()
             }
           case MaxTimeoutMin(min) =>
@@ -159,15 +179,15 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
               } else {
                 log.error(s"wrong max-timeout-min param: $min, must be integer above zero")
               }
-              current_command_number += 1
+              command_number.nextNumber()
               commandsCheck()
           case Goto(goto) =>
-            if(goto >= 1 && goto != current_command_number) {
+            if(goto >= 1 && goto != command_number.current) {
               log.info(s"going to $goto command")
-              current_command_number = goto-1
+              command_number.goto(goto-1)
             } else {
               log.error(s"wrong goto command: $goto")
-              current_command_number += 1
+              command_number.nextNumber()
             }
             commandsCheck()
           case BuildMine(mine, mail) =>
@@ -178,7 +198,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
                   "started to build mine",
                   s"started to build mine $mine")
               }
-              current_command_number += 1
+              command_number.nextNumber()
             }
             scheduleNextCheck()
           case BuildStation(station, mail) =>
@@ -189,7 +209,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
                   "started to build station",
                   s"started to build station $station")
               }
-              current_command_number += 1
+              command_number.nextNumber()
             }
             scheduleNextCheck()
           case Research(tech, mail) =>
@@ -200,24 +220,76 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
                   "started to research tech",
                   s"started to research tech $tech")
               }
-              current_command_number += 1
+              command_number.nextNumber()
             }
             scheduleNextCheck()
+          case FleetLimits(fleet:List[(String, Int)], else_goto:Int, mail:Boolean) =>
+            val (result, str_result) = Fleet1Parser.checkLimits(fleet)
+            if(result) {
+              log.info(s"fleet limits reached: $str_result")
+              if(mail) {
+                sendMailSimple(gmail_login, gmail_pass,
+                  "fleet limits reached",
+                  s"fleet limits reached: $str_result")
+              }
+              command_number.nextNumber()
+            } else {
+              log.info(s"fleet limits not reached: $str_result")
+              if(else_goto >= 1) {
+                log.info(s"going to $else_goto command")
+                command_number.goto(else_goto-1)
+              } else {
+                log.error(s"wrong goto command: $else_goto")
+                command_number.nextNumber()
+              }
+            }
+            commandsCheck()
+          case WaitFleetReturn =>
+            val result = OverviewParser.noSelfFlightActivity
+            if(result) {
+              log.info("no self flight activity detected")
+              command_number.nextNumber()
+              commandsCheck()
+            } else {
+              log.info(s"self flight activity: ${OverviewParser.friendly_flights} mission(s)")
+              scheduleNextCheck()
+            }
           case Quit =>
             log.info("going to shutdown")
             sendMailSimple(gmail_login, gmail_pass,
               "going to shutdown",
               "going to shutdown")
             context.system.shutdown()
+          case MailNewMessages(send_mail:Boolean) =>
+            if(send_mail) {
+              log.info("send mail on new messages")
+            } else {
+              log.info("don't send mail on new messages")
+            }
+            send_mail_on_new_messages = send_mail
+            command_number.nextNumber()
+            commandsCheck()
+          case Return =>
+            if(command_number.previous.nonEmpty) {
+              log.info(s"return to ${command_number.showPrevious} command")
+              command_number.returnBack()
+            } else {
+              log.error(s"wrong return command: nowhere to return")
+              command_number.nextNumber()
+            }
+            commandsCheck()
           case UnknownCommand(unknown_command) =>
             log.warn(s"unknown command: $unknown_command")
-            current_command_number += 1
+            command_number.nextNumber()
             commandsCheck()
           case x =>
             log.warn(s"unknown command: $x")
-            current_command_number += 1
+            command_number.nextNumber()
             commandsCheck()
         }
+      } else {
+        log.info(s"no command on line ${command_number.showCurrent}")
+        scheduleNextCheck()
       }
     }
   }
@@ -235,9 +307,11 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
     if(OverviewParser.new_messages.info > OverviewParser.previous_new_messages) {
       val diff = OverviewParser.new_messages.info - OverviewParser.previous_new_messages
       log.info(s"found new messages: $diff")
-      sendMailSimple(gmail_login, gmail_pass,
-        "new messages",
-        s"new _messages: $diff\noverall messages: ${OverviewParser.new_messages.info}")
+      if(send_mail_on_new_messages) {
+        sendMailSimple(gmail_login, gmail_pass,
+          "new messages",
+          s"new _messages: $diff\noverall messages: ${OverviewParser.new_messages.info}")
+      }
     }
   }
 
@@ -361,6 +435,8 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
         log.error("it seems we need to relogin")
         self ! EnterSite
       }
+    case Comment =>
+    case EmptyString =>
     case x =>
       log.warn(s"unknown message: $x")
       context.system.scheduler.scheduleOnce(delay = (math.random*5+1).toLong.seconds) {

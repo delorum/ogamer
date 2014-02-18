@@ -176,7 +176,7 @@ object ResourcesParser extends DefaultHandler {
 
     conn.executeGet(s"http://$uni/game/index.php?page=resources")
     parse(conn.currentHtml)
-    Thread.sleep((math.random*10).toInt)
+    Thread.sleep((math.random*10).toInt*1000)
 
     buildings.get(mine) match {
       case Some((link, building_info)) =>

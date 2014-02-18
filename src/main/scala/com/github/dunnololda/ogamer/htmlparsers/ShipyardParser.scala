@@ -140,7 +140,7 @@ object ShipyardParser extends DefaultHandler {
     } else {
       conn.executeGet(s"http://$uni/game/index.php?page=shipyard")
       parse(conn.currentHtml)
-      Thread.sleep((math.random*10).toInt)
+      Thread.sleep((math.random*10).toInt*1000)
 
       if(token == "") {
         log.warn("failed to obtain token")
@@ -179,7 +179,7 @@ object ShipyardParser extends DefaultHandler {
                   conn.addPostData(form_ship_type)
                   conn.executePost(s"http://$uni/game/index.php?page=shipyard&ajax=1")
                   conn.removeCustomHeader("X-Requested-With")
-                  Thread.sleep((math.random*10).toInt)
+                  Thread.sleep((math.random*10).toInt*1000)
 
                   val form_ship_data = new JSONObject()
                   form_ship_data.put("modus", 1)

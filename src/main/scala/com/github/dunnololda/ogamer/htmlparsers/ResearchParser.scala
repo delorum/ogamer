@@ -148,7 +148,7 @@ object ResearchParser extends DefaultHandler {
 
     conn.executeGet(s"http://$uni/game/index.php?page=research")
     parse(conn.currentHtml)
-    Thread.sleep((math.random*10).toInt)
+    Thread.sleep((math.random*10).toInt*1000)
 
     techs.get(tech) match {
       case Some((link, tech_info)) =>
