@@ -22,16 +22,19 @@ case class BuildStation(station:String, mail:Boolean) extends Command
 case class Research(tech:String, mail:Boolean) extends Command
 case class MailNewMessages(send_mail:Boolean) extends Command
 case object WaitFleetReturn extends Command
-case class FleetLimits(fleet:List[(String, Int)], else_goto:Int, mail:Boolean) extends Command
+case class SelfFlightsLE(amount:Int) extends Command
+case class FleetLimits(fleet:List[(String, Int)], else_goto:Option[Int], mail:Boolean) extends Command
 case object Return extends Command
 case object EmptyString extends Command
 case object Comment extends Command
 case class UnknownCommand(command:String) extends Command
+case object LogHtml extends Command
 
 object CommandsParser extends JavaTokenParsers {
   private val log = MySimpleLogger(this.getClass.getName)
 
   def maybeMailParser:Parser[Boolean] = opt("mail") ^^ {case x => x.exists(_ == "mail")}
+  def maybeNoMailParser:Parser[Boolean] = opt("nomail") ^^ {case x => x.exists(_ == "nomail")}
   def missionParser:Parser[String] = "spy" | "attack" | "transport" | "stay-on"
   def shipParser:Parser[String] =
     "light-interceptor" |
@@ -107,12 +110,12 @@ object CommandsParser extends JavaTokenParsers {
     case "send"~mission~fleet~resources~target_planet~mail => SendFleet(mission, fleet, resources, target_planet, mail)
   }
 
-  def buildShipParser:Parser[BuildShip] = "build-ship"~shipParser~wholeNumber~maybeMailParser ^^ {
-    case "build-ship"~ship~amount~mail => BuildShip(ship, amount.toInt, mail)
+  def buildShipParser:Parser[BuildShip] = "build-ship"~shipParser~wholeNumber~maybeNoMailParser ^^ {
+    case "build-ship"~ship~amount~no_mail => BuildShip(ship, amount.toInt, !no_mail)
   }
 
-  def buildDefenseParser:Parser[BuildDefense] = "build-defense"~defenseParser~wholeNumber~maybeMailParser ^^ {
-    case "build-defense"~defense~amount~mail => BuildDefense(defense, amount.toInt, mail)
+  def buildDefenseParser:Parser[BuildDefense] = "build-defense"~defenseParser~wholeNumber~maybeNoMailParser ^^ {
+    case "build-defense"~defense~amount~no_mail => BuildDefense(defense, amount.toInt, !no_mail)
   }
   
   def limitsParser:Parser[Limits] = "limits"~resourcesParser~maybeMailParser ^^ {
@@ -123,23 +126,29 @@ object CommandsParser extends JavaTokenParsers {
 
   def gotoParser:Parser[Goto] = "goto"~wholeNumber ^^ {case "goto"~goto => Goto(goto.toInt)}
 
-  def buildMineParser:Parser[BuildMine] = "build-mine"~mineParser~maybeMailParser ^^ {case "build-mine"~mine~mail => BuildMine(mine, mail)}
+  def buildMineParser:Parser[BuildMine] = "build-mine"~mineParser~maybeNoMailParser ^^ {case "build-mine"~mine~no_mail => BuildMine(mine, !no_mail)}
 
-  def buildStationParser:Parser[BuildStation] = "build-station"~stationParser~maybeMailParser ^^ {
-    case "build-station"~station~mail => BuildStation(station, mail)
+  def buildStationParser:Parser[BuildStation] = "build-station"~stationParser~maybeNoMailParser ^^ {
+    case "build-station"~station~no_mail => BuildStation(station, !no_mail)
   }
 
-  def researchParser:Parser[Research] = "research"~techParser~maybeMailParser ^^ {case "research"~tech~mail => Research(tech, mail)}
+  def researchParser:Parser[Research] = "research"~techParser~maybeNoMailParser ^^ {case "research"~tech~no_mail => Research(tech, !no_mail)}
 
-  def fleetLimistParser:Parser[FleetLimits] = "fleet-limits"~fleetParser~maybeMailParser~"else-goto"~wholeNumber ^^ {
-    case "fleet-limits"~fleet~mail~"else-goto"~else_goto => FleetLimits(fleet, else_goto.toInt, mail)
+  def fleetLimistParser:Parser[FleetLimits] = "fleet-limits"~fleetParser~maybeMailParser~opt("else-goto"~wholeNumber) ^^ {
+    case "fleet-limits"~fleet~mail~maybe_else_goto => FleetLimits(fleet, maybe_else_goto.map {
+      case "else-goto"~else_goto => else_goto.toInt
+    }, mail)
   }
 
   def waitFleetReturnParser:Parser[WaitFleetReturn.type] = "wait-fleet-return" ^^ {case _ => WaitFleetReturn}
 
+  def selfFlightsLEParser:Parser[SelfFlightsLE] = "self-flights-le"~wholeNumber ^^ {case "self-flights-le"~amount => SelfFlightsLE(amount.toInt)}
+
   def mailNewMessagesParser:Parser[MailNewMessages] = "mail-new-messages"~("on" | "off") ^^ {case "mail-new-messages"~x => MailNewMessages("on" == x)}
 
   def returnParser:Parser[Return.type] = "return" ^^ {case _ => Return}
+
+  def loghtmlParser:Parser[LogHtml.type] = "log-html" ^^ {case _ => LogHtml}
 
   def commentParser:Parser[Comment.type] = "#"~".*".r ^^ {case "#"~s => Comment}
 
@@ -158,8 +167,10 @@ object CommandsParser extends JavaTokenParsers {
     researchParser        |
     fleetLimistParser     |
     waitFleetReturnParser |
+    selfFlightsLEParser   |
     mailNewMessagesParser |
     returnParser          |
+    loghtmlParser         |
     commentParser         |
     emptyStringParser
 

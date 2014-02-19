@@ -7,6 +7,6 @@ object ParserTest extends App with JavaTokenParsers {
     case "\"hostile\""~":"~hostile~","~"\"neutral\""~":"~neutral~","~"\"friendly\""~":"~friendly~s => (hostile.toInt, neutral.toInt, friendly.toInt)
   }
 
-  val str = "\"hostile\" : 0, \"neutral\" :0, \"friendly\": 1, \"eventTime\":40482,\"eventText\":\"\\u0410\\u0442\\u0430\\u043a\\u0430"
-  println(parseAll(flightInfoParser, str))
+  val str = "{reloadEventbox({\"hostile\":0,\"neutral\":0,\"friendly\":1,\"eventTime\":46,\"eventText\":\"\\u0428\\u043f\\u0438\\u043e\\u043d\\u0430\\u0436 (\\u0412)\"});}"
+  println(parseAll(flightInfoParser, str.drop(str.indexOf("reloadEventbox({")).drop("reloadEventbox({".length).takeWhile(_ != '}')))
 }

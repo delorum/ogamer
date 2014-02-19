@@ -223,7 +223,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
               command_number.nextNumber()
             }
             scheduleNextCheck()
-          case FleetLimits(fleet:List[(String, Int)], else_goto:Int, mail:Boolean) =>
+          case FleetLimits(fleet, maybe_else_goto, mail) =>
             val (result, str_result) = Fleet1Parser.checkLimits(fleet)
             if(result) {
               log.info(s"fleet limits reached: $str_result")
@@ -233,17 +233,24 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
                   s"fleet limits reached: $str_result")
               }
               command_number.nextNumber()
+              commandsCheck()
             } else {
               log.info(s"fleet limits not reached: $str_result")
-              if(else_goto >= 1) {
-                log.info(s"going to $else_goto command")
-                command_number.goto(else_goto-1)
-              } else {
-                log.error(s"wrong goto command: $else_goto")
-                command_number.nextNumber()
+              maybe_else_goto match {
+                case Some(else_goto) =>
+                  if(else_goto >= 1) {
+                    log.info(s"going to $else_goto command")
+                    command_number.goto(else_goto-1)
+                  } else {
+                    log.error(s"wrong goto command: $else_goto")
+                    command_number.nextNumber()
+                  }
+                  commandsCheck()
+                case None =>
+                  scheduleNextCheck()
               }
             }
-            commandsCheck()
+
           case WaitFleetReturn =>
             val result = OverviewParser.noSelfFlightActivity
             if(result) {
@@ -252,6 +259,16 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
               commandsCheck()
             } else {
               log.info(s"self flight activity: ${OverviewParser.friendly_flights} mission(s)")
+              scheduleNextCheck()
+            }
+          case SelfFlightsLE(amount) =>
+            val result = OverviewParser.friendly_flights <= amount
+            if(result) {
+              log.info(s"self flight activity: ${OverviewParser.friendly_flights} mission(s), less or equal then required amount: $amount")
+              command_number.nextNumber()
+              commandsCheck()
+            } else {
+              log.info(s"self flight activity: ${OverviewParser.friendly_flights} mission(s), more then required: $amount")
               scheduleNextCheck()
             }
           case Quit =>
@@ -277,6 +294,18 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
               log.error(s"wrong return command: nowhere to return")
               command_number.nextNumber()
             }
+            commandsCheck()
+          case LogHtml =>
+            log.info("=========================== HTML LOG ===========================")
+            log.info(conn.currentHtml)
+            log.info("================================================================")
+            command_number.nextNumber()
+            commandsCheck()
+          case EmptyString =>
+            command_number.nextNumber()
+            commandsCheck()
+          case Comment =>
+            command_number.nextNumber()
             commandsCheck()
           case UnknownCommand(unknown_command) =>
             log.warn(s"unknown command: $unknown_command")
@@ -306,7 +335,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
   private def newMessagesCheck() {
     if(OverviewParser.new_messages.info > OverviewParser.previous_new_messages) {
       val diff = OverviewParser.new_messages.info - OverviewParser.previous_new_messages
-      log.info(s"found new messages: $diff")
+      log.info(s"found new messages: $diff, overall messages: ${OverviewParser.new_messages.info}")
       if(send_mail_on_new_messages) {
         sendMailSimple(gmail_login, gmail_pass,
           "new messages",
@@ -435,8 +464,6 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
         log.error("it seems we need to relogin")
         self ! EnterSite
       }
-    case Comment =>
-    case EmptyString =>
     case x =>
       log.warn(s"unknown message: $x")
       context.system.scheduler.scheduleOnce(delay = (math.random*5+1).toLong.seconds) {

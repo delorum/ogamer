@@ -25,7 +25,7 @@ class IntObtainer extends InfoObtainer[Int] {
   }
 }
 
-class IntObtainerWithout extends IntObtainer {
+class IntObtainerNoWarn extends IntObtainer {
   override def obtainer2info() {
     _info = str2intOrDefault(info_obtainer.toString().trim(), 0, without_warning = true)
   }
@@ -46,7 +46,7 @@ object OverviewParser extends DefaultHandler with JavaTokenParsers {
   var hostile_flights = 0
 
   var previous_new_messages = 0
-  val new_messages = new IntObtainerWithout
+  val new_messages = new IntObtainerNoWarn
 
   val all_obtainers = List(metal, crystal, deuterium, energy, new_messages)
 

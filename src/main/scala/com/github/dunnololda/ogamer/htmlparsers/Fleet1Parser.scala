@@ -287,13 +287,13 @@ object Fleet1Parser extends DefaultHandler {
         fleet_info.get(ship) match {
           case Some(ShipInfo(ship_name, ship_type, ship_capacity, overall_amount, available)) =>
             if(available && overall_amount >= amount) {
-              (true, s"$overall_amount/$amount")
+              (true, s"$ship:$overall_amount/$amount")
             } else {
-              (false, s"$overall_amount/$amount")
+              (false, s"$ship:$overall_amount/$amount")
             }
           case None =>
             log.warn(s"unknown ship: $ship")
-            (false, s"unknown/$amount")
+            (false, s"$ship:unknown/$amount")
         }
     }
     (info.forall(_._1), info.map(_._2).mkString(", "))
