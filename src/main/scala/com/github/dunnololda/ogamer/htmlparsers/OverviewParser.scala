@@ -7,6 +7,8 @@ import java.io.StringReader
 import com.github.dunnololda.cli.MySimpleLogger
 import com.github.dunnololda.ogamer._
 import scala.util.parsing.combinator._
+import scala.collection.mutable
+import com.github.dunnololda.conn.Conn
 
 class IntObtainer extends InfoObtainer[Int] {
   protected var _info:Int = 0
@@ -50,6 +52,13 @@ object OverviewParser extends DefaultHandler with JavaTokenParsers {
 
   val all_obtainers = List(metal, crystal, deuterium, energy, new_messages)
 
+  private var planet_obtain_started = false
+  private var planet_coords_obtain_started = false
+  private val planet_coord_sb = new StringBuilder
+  private var planet_href = ""
+
+  val planets = mutable.HashMap[String, String]()
+
   override def startDocument() {
     previous_new_messages = new_messages.info
     under_attack = false
@@ -57,6 +66,12 @@ object OverviewParser extends DefaultHandler with JavaTokenParsers {
     neutral_flights = 0
     hostile_flights = 0
     all_obtainers.foreach(_.init())
+
+    planets.clear()
+    planet_obtain_started = false
+    planet_coords_obtain_started = false
+    planet_coord_sb.clear()
+    planet_href = ""
   }
 
   override def startElement(uri:String, local_name:String, raw_name:String, amap:Attributes) {
@@ -75,6 +90,16 @@ object OverviewParser extends DefaultHandler with JavaTokenParsers {
     } else if ("span".equalsIgnoreCase(raw_name) && "resources_energy" == amap.getValue("id")) {
       energy.info_obtain_started = true
     }
+
+    if("div".equalsIgnoreCase(raw_name) && amap.getValue("class") != null && amap.getValue("class").split(" ").contains("smallplanet")) {
+       planet_obtain_started = true
+    }
+    if("span".equalsIgnoreCase(raw_name) && planet_obtain_started && amap.getValue("class") != null && amap.getValue("class").split(" ").contains("planet-koords")) {
+      planet_coords_obtain_started = true
+    }
+    if ("a".equalsIgnoreCase(raw_name) && planet_obtain_started && amap.getValue("href") != null) {
+      planet_href = amap.getValue("href")
+    }
   }
 
   override def characters(ch:Array[Char], start:Int, length:Int) {
@@ -90,6 +115,7 @@ object OverviewParser extends DefaultHandler with JavaTokenParsers {
     } else if(new_messages.info_obtain_started) {
       new_messages.append(value)
     }
+    if(planet_obtain_started && planet_coords_obtain_started) planet_coord_sb.append(value)
   }
 
   override def endElement(uri:String, local_name:String, raw_name:String) {
@@ -103,6 +129,16 @@ object OverviewParser extends DefaultHandler with JavaTokenParsers {
       energy.info_obtain_started = false
     } else if ("span".equalsIgnoreCase(raw_name) && new_messages.info_obtain_started) {
       new_messages.info_obtain_started = false
+    }
+
+    if ("span".equalsIgnoreCase(raw_name) && planet_coords_obtain_started) {
+      planet_coords_obtain_started = false
+    }
+    if ("div".equalsIgnoreCase(raw_name) && planet_obtain_started) {
+      planets(planet_coord_sb.toString().replace("[", "").replace("]", "").trim()) = planet_href
+      planet_obtain_started = false
+      planet_coord_sb.clear()
+      planet_href = ""
     }
   }
 
@@ -139,4 +175,16 @@ object OverviewParser extends DefaultHandler with JavaTokenParsers {
 
   def noFlightActivity:Boolean = hostile_flights == 0 && neutral_flights == 0 && friendly_flights == 0
   def noSelfFlightActivity:Boolean = friendly_flights == 0
+
+  def setPlanet(planet:String)(implicit conn:Conn):Boolean = {
+    log.info(s"trying to set planet $planet")
+    planets.get(planet) match {
+      case Some(planet_link) =>
+        conn.executeGet(planet_link)
+        true
+      case None =>
+        log.warn(s"link for planet $planet not found!")
+        false
+    }
+  }
 }

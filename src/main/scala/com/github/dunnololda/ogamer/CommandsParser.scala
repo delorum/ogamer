@@ -4,7 +4,7 @@ import scala.util.parsing.combinator._
 import com.github.dunnololda.cli.MySimpleLogger
 
 sealed trait Command
-case object Quit extends Command
+case class Quit(mail:Boolean) extends Command
 case class SendFleet(
   mission:String,
   fleet:List[(String, Int)],
@@ -29,6 +29,7 @@ case object EmptyString extends Command
 case object Comment extends Command
 case class UnknownCommand(command:String) extends Command
 case object LogHtml extends Command
+case class SetPlanet(planet:String) extends Command
 
 object CommandsParser extends JavaTokenParsers {
   private val log = MySimpleLogger(this.getClass.getName)
@@ -104,7 +105,10 @@ object CommandsParser extends JavaTokenParsers {
     "shield" |
     "armor"
 
-  def quitParser:Parser[Quit.type] = "quit" ^^ {case x => Quit}
+  def quitParser:Parser[Quit] = "quit"~maybeNoMailParser ^^ {
+    case "quit"~no_mail=>
+      Quit(!no_mail)
+  }
 
   def sendFleetParser:Parser[SendFleet] = "send"~missionParser~fleetParser~resourcesParser~planetParser~maybeMailParser ^^ {
     case "send"~mission~fleet~resources~target_planet~mail => SendFleet(mission, fleet, resources, target_planet, mail)
@@ -150,6 +154,12 @@ object CommandsParser extends JavaTokenParsers {
 
   def loghtmlParser:Parser[LogHtml.type] = "log-html" ^^ {case _ => LogHtml}
 
+  def setPlanetParser:Parser[SetPlanet] = "set-planet"~planetParser ^^ {
+    case "set-planet"~planet =>
+      val (g, s, p) = planet
+      SetPlanet(s"$g:$s:$p")
+  }
+
   def commentParser:Parser[Comment.type] = "#"~".*".r ^^ {case "#"~s => Comment}
 
   def emptyStringParser:Parser[EmptyString.type] = " *".r ^^ {case s => EmptyString}
@@ -171,16 +181,17 @@ object CommandsParser extends JavaTokenParsers {
     mailNewMessagesParser |
     returnParser          |
     loghtmlParser         |
+    setPlanetParser       |
     commentParser         |
     emptyStringParser
 
-  def loadCommands:Array[Command] = {
-    val commands_file = new java.io.File("commands")
+  def loadCommands(commands_filename:String):Array[Command] = {
+    val commands_file = new java.io.File(commands_filename)
     if(!commands_file.exists()) Array()
     else {
       try {
         (for {
-          line <- io.Source.fromFile("commands").getLines()
+          line <- io.Source.fromFile(commands_filename).getLines()
         } yield {
           parseAll(commandParser, line) match {
             case Success(command, _) => command

@@ -35,7 +35,8 @@ object Main extends Cli {
     ("l", "login", "ogame user login", true, true),
     ("p", "pass", "ogame user password", true, true),
     ("g", "gmail-login", "gmail login to send notifications to", true, true),
-    ("gp", "gmail-pass", "gmail password", true, true)
+    ("gp", "gmail-pass", "gmail password", true, true),
+    ("c", "commands", "path to file with commands for program. 'commands' by default", true, false)
   )
 
   val uni         = stringProperty("uni")
@@ -43,9 +44,10 @@ object Main extends Cli {
   val pass        = stringProperty("pass")
   val gmail_login = stringProperty("gmail-login")
   val gmail_pass  = stringProperty("gmail-pass")
+  val commands_filename = property("commands", "commands")
 
   private val system = ActorSystem("ogame")
-  system.actorOf(Props(new Master(login, pass, gmail_login, gmail_pass)(uni)), name = "master")
+  system.actorOf(Props(new Master(login, pass, gmail_login, gmail_pass, commands_filename)(uni)), name = "master")
 
   Runtime.getRuntime.addShutdownHook(new Thread() {
     override def run() {
@@ -66,7 +68,7 @@ case object ShipyardPage
 case object DefensePage
 case object Fleet1Page
 
-class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(implicit uni:String) extends Actor {
+class Master(login:String, pass:String, gmail_login:String, gmail_pass:String, commands_filename:String)(implicit uni:String) extends Actor {
   private val log = MySimpleLogger(this.getClass.getName)
 
   private val all_pages = List(OverviewPage, ResourcesPage, StationPage, ResearchPage, ShipyardPage, DefensePage, Fleet1Page)
@@ -78,6 +80,8 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
   private var max_timeout_between_check_seconds = 5*60   // 5 minutes in seconds
   private val command_number = new CommandNumber(0)
   private var send_mail_on_new_messages = true
+
+  private var current_planet = ""
 
   private implicit val conn = new Conn
   private var is_logged_in = false
@@ -100,7 +104,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
   }
 
   private def commandsCheck() {
-    val commands = CommandsParser.loadCommands
+    val commands = CommandsParser.loadCommands(commands_filename)
     if(commands.isEmpty) {
       log.info("no commands found")
       scheduleNextCheck()
@@ -301,6 +305,13 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
             log.info("================================================================")
             command_number.nextNumber()
             commandsCheck()
+          case SetPlanet(planet) =>
+            val result = OverviewParser.setPlanet(planet)
+            if(result) {
+              current_planet = planet
+            }
+            command_number.nextNumber()
+            commandsCheck()
           case EmptyString =>
             command_number.nextNumber()
             commandsCheck()
@@ -355,9 +366,9 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
     case PerformLogin =>
       val login_data = new JSONObject()
       login_data.put("kid", "")
-      login_data.put("uni", "s118-ru.ogame.gameforge.com")
-      login_data.put("login", "nulli")
-      login_data.put("pass", "lienajava")
+      login_data.put("uni", uni)
+      login_data.put("login", login)
+      login_data.put("pass", pass)
       conn.addPostData(login_data)
       //conn.addHeader("Host", "ru.ogame.gameforge.com")
       conn.addHeader("Origin", "http://ru.ogame.gameforge.com")
@@ -375,6 +386,10 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String)(i
         log.info("logged in")
         is_logged_in = true
         log.info(s"Resources: m ${OverviewParser.metal.info} : c ${OverviewParser.crystal.info} : d ${OverviewParser.deuterium.info} : e ${OverviewParser.energy.info}")
+        if(current_planet != "") {
+          log.info(s"setting current planet $current_planet")
+          OverviewParser.setPlanet(current_planet)
+        }
         attackCheck()
         newMessagesCheck()
         commandsCheck()
