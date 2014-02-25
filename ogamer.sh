@@ -6,7 +6,10 @@ LOGIN=
 PASS=
 GMAILLOGIN=
 GMAILPASS=
-COMMANDS=
+COMMANDS=$2
+if [[ "$COMMANDS" = "" ]]; then
+    COMMANDS=commands
+fi
 JAVABIN=/opt/java/bin/java
 RETVAL=0
 

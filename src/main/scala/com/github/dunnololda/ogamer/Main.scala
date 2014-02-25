@@ -330,7 +330,7 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String, c
             commandsCheck()
         }
       } else {
-        log.info(s"no command on line ${command_number.showCurrent}")
+        log.info(s"current line: ${command_number.showCurrent}: no commands")
         scheduleNextCheck()
       }
     }
