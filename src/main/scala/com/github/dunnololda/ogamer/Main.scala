@@ -275,11 +275,13 @@ class Master(login:String, pass:String, gmail_login:String, gmail_pass:String, c
               log.info(s"self flight activity: ${OverviewParser.friendly_flights} mission(s), more then required: $amount")
               scheduleNextCheck()
             }
-          case Quit =>
+          case Quit(mail) =>
             log.info("going to shutdown")
-            sendMailSimple(gmail_login, gmail_pass,
-              "going to shutdown",
-              "going to shutdown")
+            if(mail) {
+              sendMailSimple(gmail_login, gmail_pass,
+                "going to shutdown",
+                "going to shutdown")
+            }
             context.system.shutdown()
           case MailNewMessages(send_mail:Boolean) =>
             if(send_mail) {

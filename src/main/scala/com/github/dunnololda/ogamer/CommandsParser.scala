@@ -68,17 +68,17 @@ object CommandsParser extends JavaTokenParsers {
     "anti-missile" |
     "interplanet-missile"
   def mineParser:Parser[String] =
+    "metal-shelter" |
+    "metal-storage" |
     "metal" |
+    "crystal-shelter" |
+    "crystal-storage" |
     "crystal" |
+    "deuterium-storage" |
+    "deuterium-shelter" |
     "deuterium" |
     "electro" |
-    "thermonuclear" |
-    "metal-storage" |
-    "crystal-storage" |
-    "deuterium-storage" |
-    "metal-shelter" |
-    "crystal-shelter" |
-    "deuterium-shelter"
+    "thermonuclear"
   def stationParser:Parser[String] =
     "robots" |
     "shipyard" |
