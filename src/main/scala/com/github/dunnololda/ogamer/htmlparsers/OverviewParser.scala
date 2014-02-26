@@ -181,6 +181,7 @@ object OverviewParser extends DefaultHandler with JavaTokenParsers {
     planets.get(planet) match {
       case Some(planet_link) =>
         conn.executeGet(planet_link)
+        parse(conn.currentHtml)
         true
       case None =>
         log.warn(s"link for planet $planet not found!")
